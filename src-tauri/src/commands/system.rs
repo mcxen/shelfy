@@ -78,6 +78,6 @@ pub fn show_popup_cmd(app: AppHandle) {
 }
 
 #[tauri::command]
-pub fn show_settings_cmd(app: AppHandle) {
-    crate::tray::show_settings_window(&app);
+pub fn show_settings_cmd(app: AppHandle, section: Option<String>) {
+    crate::tray::show_settings_window_at(&app, section.as_deref());
 }

@@ -3,11 +3,11 @@ import { Activity, Bot, Copy, Download, FileCheck2, Save, ServerCog, SlidersHori
 import { AppSettings, McpClientConfig, ScheduleSettings, SchedulerLog } from "../../store/useAppStore";
 import { AnimatedIcon } from "../ui/animated-icon";
 import { Button } from "../ui/button";
+import { Card } from "../ui/card";
 import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { Separator } from "../ui/separator";
 import { Slider } from "../ui/slider";
 import { Switch } from "../ui/switch";
 
@@ -103,8 +103,11 @@ export function GeneralTab({
   const { t } = useTranslation();
 
   return (
-    <div className="w-full max-w-5xl space-y-6">
-      <div className="space-y-4">
+    <div className="w-full space-y-4">
+      <Card className="grid gap-4 p-4 md:grid-cols-2">
+        <div className="md:col-span-2">
+          <h2 className="text-lg font-semibold">{t("settings.general.title")}</h2>
+        </div>
         <div>
           <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.general.language")}</Label>
           <Select value={settings?.language || "en"} onValueChange={handleChangeLanguage}>
@@ -136,12 +139,12 @@ export function GeneralTab({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background/45 px-3 py-2">
           <Label className="text-sm text-muted-foreground">{t("settings.general.startWithSystem")}</Label>
           <Switch checked={settings?.autostart || false} onCheckedChange={(checked) => setAutostart(checked)} />
         </div>
 
-        <div className="space-y-2">
+        <div className="space-y-2 md:col-span-2">
           <div className="flex items-center justify-between">
             <Label className="text-sm text-muted-foreground">{t("settings.general.gracePeriod")}</Label>
             <span className="text-xs text-muted-foreground">{formatDuration(currentGraceSeconds)}</span>
@@ -170,7 +173,7 @@ export function GeneralTab({
           <p className="text-xs text-muted-foreground">{t("settings.general.gracePeriodDesc")}</p>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background/45 px-3 py-2 md:col-span-2">
           <div>
             <Label className="text-sm text-muted-foreground">{t("settings.general.checkFileLock")}</Label>
             <p className="text-xs text-muted-foreground">{t("settings.general.checkFileLockDesc")}</p>
@@ -183,10 +186,9 @@ export function GeneralTab({
             }}
           />
         </div>
-      </div>
+      </Card>
 
-      <div className="space-y-4">
-        <Separator />
+      <Card className="space-y-4 p-4">
         <div>
           <h3 className="flex items-center gap-2 text-base font-semibold">
             <SlidersHorizontal size={16} className="text-primary" />
@@ -215,7 +217,7 @@ export function GeneralTab({
           </Select>
         </div>
 
-        <div className="space-y-2">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: localSchedule.schedule_times_per_day }).map((_, idx) => {
             const key = `schedule_time_${idx + 1}` as keyof ScheduleSettings;
             return (
@@ -331,10 +333,9 @@ export function GeneralTab({
             )}
           </div>
         </div>
-      </div>
+      </Card>
 
-      <div className="space-y-4">
-        <Separator />
+      <Card className="space-y-4 p-4">
         <div>
           <h3 className="flex items-center gap-2 text-base font-semibold">
             <Bot size={16} className="text-primary" />
@@ -431,10 +432,9 @@ export function GeneralTab({
             className="min-h-36 w-full resize-y rounded-lg border border-border bg-muted/30 px-3 py-2 font-mono text-xs leading-5 text-foreground outline-none"
           />
         </div>
-      </div>
+      </Card>
 
-      <div className="space-y-4">
-        <Separator />
+      <Card className="space-y-4 p-4">
         <div>
           <h3 className="text-base font-semibold">{t("settings.config.title")}</h3>
           <p className="text-xs text-muted-foreground">{t("settings.config.desc")}</p>
@@ -464,7 +464,7 @@ export function GeneralTab({
             {configToast.message}
           </div>
         )}
-      </div>
+      </Card>
     </div>
   );
 }

@@ -21,6 +21,7 @@ pub fn add_folder_cmd(app: tauri::AppHandle, path: String, mode: String) -> Resu
         let mut watcher = state.watcher.lock().unwrap();
         let _ = watcher.refresh(app.clone());
     }
+    crate::tray::refresh_tray_menu(&app);
     Ok(id)
 }
 
@@ -31,6 +32,7 @@ pub fn remove_folder_cmd(app: tauri::AppHandle, id: i64) -> Result<(), String> {
         let mut watcher = state.watcher.lock().unwrap();
         let _ = watcher.refresh(app.clone());
     }
+    crate::tray::refresh_tray_menu(&app);
     Ok(())
 }
 
@@ -66,6 +68,7 @@ pub fn update_folder_mode_cmd(app: tauri::AppHandle, id: i64, mode: String) -> R
 
         let _ = watcher.refresh(app.clone());
     }
+    crate::tray::refresh_tray_menu(&app);
     Ok(())
 }
 

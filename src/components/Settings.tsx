@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   DEFAULT_ORDEN_EXAMPLE,
@@ -12,13 +12,15 @@ import {
   ScheduleSettings,
 } from "../store/useAppStore";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { BrandMark } from "./BrandMark";
 import { GeneralTab } from "./settings/GeneralTab";
 import { IgnoreTab } from "./settings/IgnoreTab";
 import { RulesTab } from "./settings/RulesTab";
 import { OrdenPreview } from "./settings/OrdenPreview";
-import { SidebarButton } from "./settings/SidebarButton";
+import { OrdenVisualRuleCard } from "./settings/OrdenVisualRuleCard";
+import { TopNavButton } from "./settings/TopNavButton";
 import {
   defaultMcpDraft,
   defaultOrdenVisualConfig,
@@ -39,11 +41,10 @@ import {
   visualToOrdenYaml,
 } from "./settings/utils";
 import { Badge } from "./ui/badge";
-import { Table, TableBody, TableCaption, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "./ui/table";
+import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "./ui/table";
 import { Menu, MenuGroup, MenuGroupLabel, MenuItem, MenuPopup, MenuSeparator, MenuTrigger } from "./ui/menu";
 import { Button } from "./ui/button";
 import { Card } from "./ui/card";
-import { Checkbox } from "./ui/checkbox";
 import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "./ui/select";
@@ -80,6 +81,13 @@ import {
 
 
 type Tab = "rules" | "history" | "ignore" | "advanced" | "general";
+const SETTINGS_TABS: Tab[] = ["rules", "history", "ignore", "advanced", "general"];
+
+function initialSettingsTab(): Tab {
+  const query = window.location.hash.split("?", 2)[1] || "";
+  const requested = new URLSearchParams(query).get("tab") as Tab | null;
+  return requested && SETTINGS_TABS.includes(requested) ? requested : "rules";
+}
 
 export default function Settings() {
   const { t, i18n } = useTranslation();
@@ -132,7 +140,8 @@ export default function Settings() {
     loadStats,
   } = useAppStore();
 
-  const [tab, setTab] = useState<Tab>("rules");
+  const [tab, setTab] = useState<Tab>(initialSettingsTab);
+  const loadedTabs = useRef(new Set<Tab>());
   const [editingRule, setEditingRule] = useState<Rule | null>(null);
   const [newFolderPath, setNewFolderPath] = useState("");
 
@@ -156,7 +165,7 @@ export default function Settings() {
   const [ordenYaml, setOrdenYaml] = useState(DEFAULT_ORDEN_EXAMPLE);
   const [ordenEditorMode, setOrdenEditorMode] = useState<OrdenEditorMode>("source");
   const [ordenSourceExpanded, setOrdenSourceExpanded] = useState(false);
-  const [ordenView, setOrdenView] = useState<OrdenView>("editor");
+  const [ordenView, setOrdenView] = useState<OrdenView>("list");
   const [ordenPreviewError, setOrdenPreviewError] = useState<string | null>(null);
   const [ordenVisual, setOrdenVisual] = useState<OrdenVisualConfig>(defaultOrdenVisualConfig());
   const [ordenTags, setOrdenTags] = useState("");
@@ -175,31 +184,24 @@ export default function Settings() {
   const [ordenToast, setOrdenToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
 
   useEffect(() => {
-    loadRules();
-    loadFolders();
-    loadLogs();
-    getSchedule();
-    loadSchedulerLogs();
-  }, [loadRules, loadFolders, loadLogs, getSchedule, loadSchedulerLogs]);
-
-  useEffect(() => {
-    getSystemKeepaliveStatus()
-      .then((status) => setSystemKeepaliveSupported(status.supported))
-      .catch(() => setSystemKeepaliveSupported(false));
-  }, [getSystemKeepaliveStatus]);
+    const unlisten = listen<string>("settings-navigate", (event) => {
+      const nextTab = event.payload as Tab;
+      if (SETTINGS_TABS.includes(nextTab)) setTab(nextTab);
+    });
+    return () => {
+      unlisten.then((dispose) => dispose());
+    };
+  }, []);
 
   const loadOrdenConfigs = async (preferredName?: string) => {
     const names = await ordenList();
     setOrdenConfigs(names);
-    Promise.all(names.map(async (name) => [name, await ordenHistory(name, 20)] as const))
+    Promise.all(names.map(async (name) => [name, await ordenHistory(name, 1)] as const))
       .then((rows) => setOrdenHistoryByConfig(Object.fromEntries(rows)))
       .catch(console.error);
     const nameToLoad = preferredName || (ordenName && names.includes(ordenName) ? ordenName : names[0]);
     if (nameToLoad) {
-      const yaml = await ordenLoad(nameToLoad);
       setOrdenName(nameToLoad);
-      setOrdenYaml(yaml);
-      ordenHistory(nameToLoad, 20).then(setOrdenHistoryRows).catch(console.error);
     } else {
       setOrdenName("main");
       setOrdenYaml(DEFAULT_ORDEN_EXAMPLE);
@@ -208,10 +210,43 @@ export default function Settings() {
   };
 
   useEffect(() => {
-    loadOrdenConfigs().catch((e) => console.error("Failed to load orden configs:", e));
-    ordenJobs().then(setOrdenJobsRows).catch((e) => console.error("Failed to load orden jobs:", e));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (loadedTabs.current.has(tab)) return;
+    loadedTabs.current.add(tab);
+
+    const loadTabData = async () => {
+      if (tab === "rules") {
+        await Promise.all([loadRules(), loadFolders()]);
+      } else if (tab === "history") {
+        await loadLogs();
+      } else if (tab === "ignore") {
+        await loadFolders();
+      } else if (tab === "advanced") {
+        const [, jobs] = await Promise.all([loadOrdenConfigs(), ordenJobs()]);
+        setOrdenJobsRows(jobs);
+      } else if (tab === "general") {
+        const [, , keepalive] = await Promise.all([
+          getSchedule(),
+          loadSchedulerLogs(),
+          getSystemKeepaliveStatus().catch(() => ({ supported: false, platform: "unknown" })),
+        ]);
+        setSystemKeepaliveSupported(keepalive.supported);
+      }
+    };
+
+    loadTabData().catch((error) => {
+      loadedTabs.current.delete(tab);
+      console.error(`Failed to load ${tab} settings:`, error);
+    });
+  }, [
+    tab,
+    loadRules,
+    loadFolders,
+    loadLogs,
+    getSchedule,
+    loadSchedulerLogs,
+    getSystemKeepaliveStatus,
+    ordenJobs,
+  ]);
 
   const updateOrdenNote = (name: string, note: string) => {
     setOrdenNotes((previous) => {
@@ -221,15 +256,26 @@ export default function Settings() {
     });
   };
 
-  const configJobs = (name: string) => ordenJobsRows.filter((job) => job.config_name === name);
+  const ordenJobsByConfig = useMemo(() => {
+    const grouped = new Map<string, OrdenJob[]>();
+    ordenJobsRows.forEach((job) => {
+      grouped.set(job.config_name, [...(grouped.get(job.config_name) || []), job]);
+    });
+    return grouped;
+  }, [ordenJobsRows]);
+  const configJobs = (name: string) => ordenJobsByConfig.get(name) || [];
   const setConfigJobsEnabled = async (name: string, enabled: boolean) => {
     const jobs = configJobs(name);
     await Promise.all(jobs.map((job) => ordenSaveJob({ ...job, enabled })));
     setOrdenJobsRows(await ordenJobs());
   };
-  const filteredOrdenConfigs = ordenConfigs.filter((name) =>
-    `${name} ${ordenNotes[name] || ""}`.toLowerCase().includes(ordenSearch.trim().toLowerCase())
-  );
+  const filteredOrdenConfigs = useMemo(() => {
+    const query = ordenSearch.trim().toLowerCase();
+    if (!query) return ordenConfigs;
+    return ordenConfigs.filter((name) =>
+      `${name} ${ordenNotes[name] || ""}`.toLowerCase().includes(query)
+    );
+  }, [ordenConfigs, ordenNotes, ordenSearch]);
 
   // Sync local grace editor with loaded settings
   useEffect(() => {
@@ -274,11 +320,13 @@ export default function Settings() {
   ]);
 
   useEffect(() => {
+    if (tab !== "general") return;
     getMcpClientConfig()
       .then(setMcpClientConfig)
       .catch(() => setMcpClientConfig(null));
   }, [
     getMcpClientConfig,
+    tab,
     settings?.mcp_enabled,
     settings?.mcp_transport,
     settings?.mcp_server_name,
@@ -324,6 +372,12 @@ export default function Settings() {
     if (!editingRule) return;
     const normalizedRule = {
       ...editingRule,
+      name: editingRule.name.trim(),
+      extensions: editingRule.extensions
+        .map((extension) => extension.trim().replace(/^\./, "").toLowerCase())
+        .filter(Boolean),
+      pattern: editingRule.pattern?.trim() || null,
+      destination: editingRule.destination.trim(),
       folder_path: editingRule.folder_path?.trim() ? editingRule.folder_path.trim() : null,
     };
     if (editingRule.id) {
@@ -649,6 +703,23 @@ export default function Settings() {
     }
   };
 
+  const handleOrdenPreview = async (name: string) => {
+    try {
+      const [yaml, history] = await Promise.all([ordenLoad(name), ordenHistory(name, 20)]);
+      const visual = await ordenVisualFromYaml(yaml);
+      setOrdenName(name);
+      setOrdenYaml(yaml);
+      setOrdenVisual(visual.rules.length > 0 ? visual : defaultOrdenVisualConfig());
+      setOrdenHistoryRows(history);
+      setOrdenHistoryByConfig((previous) => ({ ...previous, [name]: history }));
+      setOrdenDetailName(name);
+      setOrdenView("detail");
+    } catch (e) {
+      console.error("Preview orden config failed:", e);
+      showOrdenToast(t("settings.orden.loadError"), "error");
+    }
+  };
+
   const handleOrdenSave = async () => {
     const name = ordenName.trim();
     if (!name) {
@@ -677,6 +748,7 @@ export default function Settings() {
       setOrdenView("editor");
       return;
     }
+    if (!window.confirm(t("settings.orden.deleteConfirm", { name: ordenName }))) return;
     try {
       await ordenDelete(ordenName);
       await loadOrdenConfigs();
@@ -702,9 +774,9 @@ export default function Settings() {
     }
   };
 
-  const newOrdenJob = (): OrdenJob => ({
-    name: `${ordenName || "main"}-job`,
-    config_name: ordenName || "main",
+  const newOrdenJob = (configName = ordenName || ordenConfigs[0] || "main"): OrdenJob => ({
+    name: `${configName}-task`,
+    config_name: configName,
     enabled: true,
     mode: "manual",
     cron_expr: "0 * * * *",
@@ -722,6 +794,20 @@ export default function Settings() {
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   });
+
+  const handleNewOrdenConfig = () => {
+    setOrdenName("main");
+    setOrdenYaml(DEFAULT_ORDEN_EXAMPLE);
+    setOrdenVisual(defaultOrdenVisualConfig());
+    setOrdenEditorMode("visual");
+    setOrdenResult(null);
+    setOrdenPreviewError(null);
+    setOrdenView("editor");
+  };
+
+  const handleNewOrdenJob = (configName?: string) => {
+    setEditingOrdenJob(newOrdenJob(configName));
+  };
 
   const handleSaveOrdenJob = async () => {
     if (!editingOrdenJob) return;
@@ -776,6 +862,7 @@ export default function Settings() {
   };
 
   const deleteOrdenConfigByName = async (name: string) => {
+    if (!window.confirm(t("settings.orden.deleteConfirm", { name }))) return;
     setOrdenBusy(true);
     try {
       await ordenDelete(name);
@@ -856,58 +943,60 @@ export default function Settings() {
   };
 
   return (
-    <div className="flex h-full overflow-hidden rounded-xl border border-border/80 bg-background text-foreground shadow-lg">
-      {/* Sidebar */}
-      <div className="flex w-60 flex-col border-r border-border/70 bg-card/95">
-        <div data-tauri-drag-region className="flex min-h-14 items-center gap-2 px-4 py-4 pl-20">
-          <Button
-            onClick={() => {
-              invoke("close_settings");
-            }}
-            variant="ghost"
-            size="icon"
-            className="size-7"
-          >
-            <ChevronLeft size={16} />
-          </Button>
-          <BrandMark showLabel />
-        </div>
-        <nav className="flex flex-1 flex-col gap-0.5 px-2">
-          <SidebarButton
+    <div className="relative flex h-full flex-col overflow-hidden rounded-xl bg-background/88 text-foreground">
+      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,color-mix(in_srgb,var(--primary)_12%,transparent),transparent_34%),radial-gradient(circle_at_88%_4%,color-mix(in_srgb,var(--accent)_42%,transparent),transparent_30%)]" />
+
+      <header className="relative z-20 shrink-0 px-4 pt-3">
+        <div data-tauri-drag-region className="glass-panel flex h-12 items-center gap-3 rounded-2xl px-3 pl-20">
+          <BrandMark showLabel className="shrink-0" iconClassName="size-7 rounded-md" />
+          <nav className="no-scrollbar mx-auto flex min-w-0 items-center gap-1 overflow-x-auto rounded-xl bg-muted/35 p-1">
+          <TopNavButton
             active={tab === "rules"}
             onClick={() => setTab("rules")}
             icon={<List size={16} />}
             label={t("settings.rules.title")}
           />
-          <SidebarButton
-            active={tab === "history"}
-            onClick={() => setTab("history")}
-            icon={<History size={16} />}
-            label={t("settings.history.title")}
-          />
-          <SidebarButton
-            active={tab === "ignore"}
-            onClick={() => setTab("ignore")}
-            icon={<X size={16} />}
-            label={t("settings.ignore.title")}
-          />
-          <SidebarButton
+          <TopNavButton
             active={tab === "advanced"}
             onClick={() => setTab("advanced")}
             icon={<Code2 size={16} />}
             label={t("settings.orden.title")}
           />
-          <SidebarButton
+          <TopNavButton
+            active={tab === "history"}
+            onClick={() => setTab("history")}
+            icon={<History size={16} />}
+            label={t("settings.history.title")}
+          />
+          <TopNavButton
+            active={tab === "ignore"}
+            onClick={() => setTab("ignore")}
+            icon={<X size={16} />}
+            label={t("settings.ignore.title")}
+          />
+          <TopNavButton
             active={tab === "general"}
             onClick={() => setTab("general")}
             icon={<Globe size={16} />}
             label={t("settings.general.title")}
           />
-        </nav>
-      </div>
+          </nav>
+          <Button
+            type="button"
+            onClick={() => invoke("close_settings")}
+            variant="ghost"
+            size="icon"
+            className="size-8 shrink-0 rounded-xl text-muted-foreground"
+            aria-label={t("settings.close")}
+          >
+            <X size={15} />
+          </Button>
+        </div>
+      </header>
 
       {/* Content */}
-      <div className="min-w-0 flex-1 overflow-y-auto overscroll-contain px-7 py-6 [scrollbar-gutter:stable]">
+      <main className="relative z-10 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-3 [scrollbar-gutter:stable]">
+        <div className="mx-auto w-full max-w-[1280px]">
         {tab === "rules" && (
           <RulesTab
             rules={rules}
@@ -928,6 +1017,7 @@ export default function Settings() {
             handleChooseDestination={handleChooseDestination}
             handleChooseRuleScopeFolder={handleChooseRuleScopeFolder}
             handleSaveRule={handleSaveRule}
+            updateRule={updateRule}
             deleteRule={deleteRule}
             handleViewHistory={(ruleLabel) => openHistoryFilter(`label:${ruleLabel}`)}
           />
@@ -1053,14 +1143,42 @@ export default function Settings() {
               <OrdenPreview
                 ordenResult={ordenResult}
                 ordenPreviewError={ordenPreviewError}
-                onBack={() => setOrdenView("editor")}
+                onBack={() => setOrdenView("list")}
               />
             ) : ordenView === "detail" && ordenDetailName ? (() => {
               const history = ordenHistoryByConfig[ordenDetailName] || [];
               const jobs = configJobs(ordenDetailName);
               return <div className="space-y-4">
-                <div className="flex items-center justify-between gap-3"><div className="flex items-center gap-3"><Button onClick={() => setOrdenView("editor")} variant="ghost" size="icon"><ChevronLeft size={17} /></Button><div><h2 className="text-lg font-semibold">{ordenDetailName}</h2><p className="text-xs text-muted-foreground">{t("settings.orden.detailDesc")}</p></div></div><Button onClick={async () => { await handleOrdenSelect(ordenDetailName); setOrdenView("editor"); }}><Pencil size={14} />{t("settings.orden.edit")}</Button></div>
-                <div className="grid gap-3 md:grid-cols-3"><Card className="p-4"><div className="text-xs text-muted-foreground">{t("settings.orden.runs")}</div><div className="mt-1 text-2xl font-semibold">{history.length}</div></Card><Card className="p-4"><div className="text-xs text-muted-foreground">{t("settings.orden.schedules")}</div><div className="mt-1 text-2xl font-semibold">{jobs.length}</div></Card><Card className="p-4"><div className="text-xs text-muted-foreground">{t("settings.orden.lastResult")}</div><div className="mt-1 text-sm font-medium">{history[0] ? `${history[0].success} / ${history[0].errors}` : "—"}</div></Card></div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <Button type="button" onClick={() => setOrdenView("list")} variant="ghost" size="icon" aria-label={t("settings.orden.backToList")}><ChevronLeft size={17} /></Button>
+                    <div><h2 className="text-lg font-semibold">{ordenDetailName}</h2><p className="text-xs text-muted-foreground">{t("settings.orden.detailDesc")}</p></div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Button type="button" onClick={() => runOrdenConfigByName(ordenDetailName, true)} variant="outline" disabled={ordenBusy}><ScanSearch size={14} />{t("settings.orden.tryRun")}</Button>
+                    <Button type="button" onClick={() => handleOrdenSelect(ordenDetailName)}><Pencil size={14} />{t("settings.orden.edit")}</Button>
+                  </div>
+                </div>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Card className="p-4"><div className="text-xs text-muted-foreground">{t("settings.orden.runs")}</div><div className="mt-1 text-2xl font-semibold">{history.length}</div></Card>
+                  <Card className="p-4"><div className="text-xs text-muted-foreground">{t("settings.orden.schedules")}</div><div className="mt-1 text-2xl font-semibold">{jobs.length}</div></Card>
+                  <Card className="p-4"><div className="text-xs text-muted-foreground">{t("settings.orden.lastResult")}</div><div className="mt-1 text-sm font-medium">{history[0] ? `${history[0].success} / ${history[0].errors}` : "—"}</div></Card>
+                </div>
+                <Card className="space-y-3 p-4">
+                  <div><h3 className="font-medium">{t("settings.orden.previewRules")}</h3><p className="text-xs text-muted-foreground">{t("settings.orden.previewRulesDesc")}</p></div>
+                  <Table>
+                    <TableHeader><TableRow><TableHead>{t("settings.orden.rule")}</TableHead><TableHead>{t("settings.orden.locations")}</TableHead><TableHead>{t("settings.orden.filter")}</TableHead><TableHead>{t("settings.orden.action")}</TableHead><TableHead>{t("settings.orden.destination")}</TableHead></TableRow></TableHeader>
+                    <TableBody>
+                      {ordenVisual.rules.map((rule) => <TableRow key={rule.id}>
+                        <TableCell><div className="font-medium">{rule.name}</div><div className="text-xs text-muted-foreground">{rule.enabled ? t("settings.orden.enabled") : t("settings.orden.stopped")}</div></TableCell>
+                        <TableCell className="max-w-48 truncate text-xs text-muted-foreground" title={rule.location}>{rule.location || "—"}</TableCell>
+                        <TableCell className="text-xs">{rule.extensions || t("settings.orden.noFilter")} · {rule.filterMode || "all"}</TableCell>
+                        <TableCell><Badge variant="outline">{t(`settings.orden.action${rule.action.charAt(0).toUpperCase()}${rule.action.slice(1)}`, { defaultValue: rule.action })}</Badge></TableCell>
+                        <TableCell className="max-w-48 truncate text-xs text-muted-foreground" title={rule.destination}>{rule.destination || "—"}</TableCell>
+                      </TableRow>)}
+                    </TableBody>
+                  </Table>
+                </Card>
                 <Card className="space-y-2 p-4"><Label>{t("settings.orden.note")}</Label><textarea value={ordenNotes[ordenDetailName] || ""} onChange={(event) => updateOrdenNote(ordenDetailName, event.target.value)} placeholder={t("settings.orden.notePlaceholder")} className="min-h-24 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/20" /></Card>
                 <Card className="p-4"><h3 className="mb-3 font-medium">{t("settings.orden.history")}</h3><Table><TableHeader><TableRow><TableHead>{t("settings.orden.time")}</TableHead><TableHead>{t("settings.orden.trigger")}</TableHead><TableHead>{t("settings.orden.mode")}</TableHead><TableHead className="text-right">{t("settings.orden.result")}</TableHead></TableRow></TableHeader><TableBody>{history.map((row) => <TableRow key={row.id || row.timestamp}><TableCell>{new Date(row.timestamp).toLocaleString()}</TableCell><TableCell>{row.trigger}</TableCell><TableCell>{row.simulate ? t("settings.orden.simulate") : t("settings.orden.run")}</TableCell><TableCell className="text-right"><Badge variant="outline" className="gap-1.5"><span className={`size-1.5 rounded-full ${row.errors ? "bg-red-500" : "bg-emerald-500"}`} />{row.success} / {row.errors}</Badge></TableCell></TableRow>)}</TableBody></Table></Card>
               </div>;
@@ -1068,31 +1186,55 @@ export default function Settings() {
               <>
 
             <div className="flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-lg font-semibold">{t("settings.orden.title")}</h2>
-                <p className="text-xs text-muted-foreground">{t("settings.orden.desc")}</p>
+              <div className="flex min-w-0 items-center gap-3">
+                {ordenView === "editor" && (
+                  <Button onClick={() => setOrdenView("list")} variant="ghost" size="icon" aria-label={t("settings.orden.backToList")}>
+                    <ChevronLeft size={17} />
+                  </Button>
+                )}
+                <div className="min-w-0">
+                  <h2 className="truncate text-lg font-semibold">
+                    {ordenView === "list" ? t("settings.orden.title") : ordenName}
+                  </h2>
+                  <p className="text-xs text-muted-foreground">
+                    {ordenView === "list" ? t("settings.orden.centerDesc") : t("settings.orden.editorDesc")}
+                  </p>
+                </div>
               </div>
               <div className="flex items-center gap-2">
-                <Button onClick={() => openHistoryFilter("engine:orden")} variant="outline">
-                  <History size={14} />
-                  {t("settings.history.title")}
-                </Button>
-                <Button onClick={handleOrdenCheck} variant="outline" disabled={ordenBusy}>
-                  <FileCheck2 size={14} />
-                  {t("settings.orden.check")}
-                </Button>
-                <Button onClick={() => handleOrdenRun(true)} variant="outline" disabled={ordenBusy}>
-                  <ScanSearch size={14} />
-                  {t("settings.orden.simulate")}
-                </Button>
-                <Button onClick={() => handleOrdenRun(false)} disabled={ordenBusy}>
-                  <Play size={14} />
-                  {t("settings.orden.run")}
-                </Button>
+                {ordenView === "list" ? (
+                  <>
+                    <Button onClick={() => openHistoryFilter("engine:orden")} variant="outline">
+                      <History size={14} />
+                      {t("settings.history.title")}
+                    </Button>
+                    <Button onClick={handleNewOrdenConfig}>
+                      <Plus size={14} />
+                      {t("settings.orden.newConfig")}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <Button onClick={handleOrdenCheck} variant="outline" disabled={ordenBusy}>
+                      <FileCheck2 size={14} />
+                      {t("settings.orden.check")}
+                    </Button>
+                    <Button onClick={() => handleOrdenRun(true)} variant="outline" disabled={ordenBusy}>
+                      <ScanSearch size={14} />
+                      {t("settings.orden.simulate")}
+                    </Button>
+                    <Button onClick={() => handleOrdenRun(false)} disabled={ordenBusy}>
+                      <Play size={14} />
+                      {t("settings.orden.run")}
+                    </Button>
+                  </>
+                )}
               </div>
             </div>
 
-            <Card className="p-4 space-y-3">
+            <Card className="space-y-3 p-4">
+              {ordenView === "editor" && (
+                <>
               <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] items-end gap-2">
                 <div>
                   <Label className="mb-1 block text-xs text-muted-foreground">
@@ -1167,26 +1309,23 @@ export default function Settings() {
                   />
                 </div>
               </div>
+                </>
+              )}
 
-              <div className="space-y-3 border-t border-border pt-3">
+              {ordenView === "list" && (
+              <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div>
                     <Label className="text-sm font-medium">{t("settings.orden.configTable")}</Label>
                     <p className="text-xs text-muted-foreground">{t("settings.orden.configTableDesc")}</p>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <div className="relative">
-                      <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
-                      <Input value={ordenSearch} onChange={(event) => setOrdenSearch(event.target.value)} placeholder={t("settings.orden.searchConfigs")} className="h-8 w-56 pl-8" />
-                    </div>
-                    <Button onClick={() => { setOrdenName("main"); setOrdenYaml(DEFAULT_ORDEN_EXAMPLE); setOrdenVisual(defaultOrdenVisualConfig()); setOrdenEditorMode("visual"); }} variant="outline" size="sm">
-                      <Plus size={14} /> {t("settings.orden.newConfig")}
-                    </Button>
+                  <div className="relative">
+                    <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+                    <Input value={ordenSearch} onChange={(event) => setOrdenSearch(event.target.value)} placeholder={t("settings.orden.searchConfigs")} className="h-8 w-56 pl-8" />
                   </div>
                 </div>
                 <div className="overflow-visible rounded-lg border border-border">
                   <Table>
-                    <TableCaption>{t("settings.orden.configTableCaption")}</TableCaption>
                     <TableHeader><TableRow><TableHead>{t("settings.orden.config")}</TableHead><TableHead>{t("settings.orden.status")}</TableHead><TableHead>{t("settings.orden.schedule")}</TableHead><TableHead>{t("settings.orden.lastRun")}</TableHead><TableHead className="text-right">{t("settings.orden.actions")}</TableHead></TableRow></TableHeader>
                     <TableBody>
                       {filteredOrdenConfigs.map((name) => {
@@ -1197,24 +1336,42 @@ export default function Settings() {
                         const status = !last ? "ready" : last.errors > 0 ? "failed" : "success";
                         return (
                           <TableRow key={name} data-state={name === ordenName ? "selected" : undefined}>
-                            <TableCell><button className="text-left" onClick={() => { setOrdenDetailName(name); setOrdenView("detail"); }}><div className="font-medium">{name}</div><div className="max-w-64 truncate text-xs text-muted-foreground">{ordenNotes[name] || t("settings.orden.noNote")}</div></button></TableCell>
+                            <TableCell><button type="button" className="text-left" onClick={() => handleOrdenPreview(name)}><div className="font-medium">{name}</div><div className="max-w-64 truncate text-xs text-muted-foreground">{ordenNotes[name] || t("settings.orden.noNote")}</div></button></TableCell>
                             <TableCell><Badge variant="outline" className="gap-1.5"><span aria-hidden="true" className={`size-1.5 rounded-full ${status === "success" ? "bg-emerald-500" : status === "failed" ? "bg-red-500" : "bg-muted-foreground/64"}`} />{t(`settings.orden.status_${status}`)}</Badge></TableCell>
                             <TableCell><Badge variant="outline" className="gap-1.5"><span aria-hidden="true" className={`size-1.5 rounded-full ${scheduled ? "bg-emerald-500" : "bg-muted-foreground/64"}`} />{scheduled ? t("settings.orden.running") : t("settings.orden.stopped")}</Badge></TableCell>
                             <TableCell className="text-xs text-muted-foreground">{last ? new Date(last.timestamp).toLocaleString() : "—"}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-1">
-                                <Button onClick={() => handleOrdenSelect(name)} variant="outline" size="sm"><Pencil size={13} />{t("settings.orden.edit")}</Button>
-                                <Button onClick={() => { setOrdenDetailName(name); setOrdenView("detail"); }} variant="ghost" size="sm"><Eye size={13} />{t("settings.orden.expand")}</Button>
-                                <Menu><MenuTrigger render={<Button variant="ghost" size="icon" aria-label={t("settings.orden.moreActions")} />}><MoreHorizontal size={15} /></MenuTrigger><MenuPopup>
-                                  <MenuGroup><MenuGroupLabel>{t("settings.orden.execution")}</MenuGroupLabel>
-                                    <MenuItem onClick={() => runOrdenConfigByName(name, false)}><Play />{t("settings.orden.run")}</MenuItem>
-                                    <MenuItem onClick={() => runOrdenConfigByName(name, true)}><ScanSearch />{t("settings.orden.simulate")}</MenuItem>
-                                  </MenuGroup><MenuSeparator />
-                                  <MenuItem disabled={jobs.length === 0 || !scheduled} onClick={() => setConfigJobsEnabled(name, false)}><Pause />{t("settings.orden.stopSchedules")}</MenuItem>
-                                  <MenuItem disabled={jobs.length === 0 || scheduled} onClick={() => setConfigJobsEnabled(name, true)}><Play />{t("settings.orden.startSchedules")}</MenuItem>
-                                  <MenuItem onClick={() => { const note = window.prompt(t("settings.orden.notePrompt"), ordenNotes[name] || ""); if (note !== null) updateOrdenNote(name, note); }}><StickyNote />{t("settings.orden.addNote")}</MenuItem>
-                                  <MenuSeparator /><MenuItem variant="destructive" onClick={() => deleteOrdenConfigByName(name)}><Trash2 />{t("settings.orden.delete")}</MenuItem>
-                                </MenuPopup></Menu>
+                                <Button type="button" onClick={() => runOrdenConfigByName(name, true)} variant="outline" size="sm" disabled={ordenBusy}>
+                                  <ScanSearch size={13} />
+                                  {t("settings.orden.tryRun")}
+                                </Button>
+                                <Button type="button" onClick={() => handleOrdenPreview(name)} variant="ghost" size="sm">
+                                  <Eye size={13} />
+                                  {t("settings.orden.preview")}
+                                </Button>
+                                <Menu>
+                                  <MenuTrigger render={<Button type="button" variant="ghost" size="icon" aria-label={t("settings.orden.moreActions")} />}>
+                                    <MoreHorizontal size={15} />
+                                  </MenuTrigger>
+                                  <MenuPopup>
+                                    <MenuGroup>
+                                      <MenuGroupLabel>{t("settings.orden.configManagement")}</MenuGroupLabel>
+                                      <MenuItem onClick={() => handleOrdenSelect(name)}><Pencil />{t("settings.orden.edit")}</MenuItem>
+                                      <MenuItem onClick={() => runOrdenConfigByName(name, false)}><Play />{t("settings.orden.run")}</MenuItem>
+                                      <MenuItem onClick={() => handleNewOrdenJob(name)}><Plus />{t("settings.orden.newTask")}</MenuItem>
+                                      <MenuItem onClick={() => { const note = window.prompt(t("settings.orden.notePrompt"), ordenNotes[name] || ""); if (note !== null) updateOrdenNote(name, note); }}><StickyNote />{t("settings.orden.addNote")}</MenuItem>
+                                    </MenuGroup>
+                                    <MenuSeparator />
+                                    <MenuGroup>
+                                      <MenuGroupLabel>{t("settings.orden.taskManagement")}</MenuGroupLabel>
+                                      <MenuItem disabled={jobs.length === 0 || !scheduled} onClick={() => setConfigJobsEnabled(name, false)}><Pause />{t("settings.orden.stopSchedules")}</MenuItem>
+                                      <MenuItem disabled={jobs.length === 0 || scheduled} onClick={() => setConfigJobsEnabled(name, true)}><Play />{t("settings.orden.startSchedules")}</MenuItem>
+                                    </MenuGroup>
+                                    <MenuSeparator />
+                                    <MenuItem variant="destructive" onClick={() => deleteOrdenConfigByName(name)}><Trash2 />{t("settings.orden.delete")}</MenuItem>
+                                  </MenuPopup>
+                                </Menu>
                               </div>
                             </TableCell>
                           </TableRow>
@@ -1226,6 +1383,7 @@ export default function Settings() {
                   </Table>
                 </div>
               </div>
+              )}
             </Card>
 
             {ordenToast && (
@@ -1240,121 +1398,116 @@ export default function Settings() {
               </div>
             )}
 
-            <Card className="space-y-3 p-4">
+            {ordenView === "list" && <Card className="space-y-3 p-4">
               <div className="flex items-center justify-between gap-2">
                 <div>
-                  <Label className="text-sm font-medium">Automation jobs</Label>
-                  <p className="text-xs text-muted-foreground">Manual, fixed time, cron, interval, condition, and monitor execution for each Orden config.</p>
+                  <Label className="text-sm font-medium">{t("settings.orden.tasks")}</Label>
+                  <p className="text-xs text-muted-foreground">{t("settings.orden.tasksDesc")}</p>
                 </div>
-                <Button onClick={() => setEditingOrdenJob(newOrdenJob())} variant="outline" size="sm">
+                <Button onClick={() => handleNewOrdenJob()} variant="outline" size="sm" disabled={ordenConfigs.length === 0}>
                   <Plus size={14} />
-                  New job
+                  {t("settings.orden.newTask")}
                 </Button>
               </div>
               {editingOrdenJob && (
                 <div className="grid gap-3 rounded-xl border border-border bg-muted/30 p-3 md:grid-cols-2">
                   <div>
-                    <Label className="mb-1 block text-xs text-muted-foreground">Name</Label>
+                    <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.taskName")}</Label>
                     <Input value={editingOrdenJob.name} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, name: e.target.value })} />
                   </div>
                   <div>
-                    <Label className="mb-1 block text-xs text-muted-foreground">Config</Label>
+                    <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.config")}</Label>
                     <Select value={editingOrdenJob.config_name} onValueChange={(value) => setEditingOrdenJob({ ...editingOrdenJob, config_name: value })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>{ordenConfigs.map((name) => <SelectItem key={name} value={name}>{name}</SelectItem>)}</SelectContent>
                     </Select>
                   </div>
                   <div>
-                    <Label className="mb-1 block text-xs text-muted-foreground">Mode</Label>
+                    <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.triggerMode")}</Label>
                     <Select value={editingOrdenJob.mode} onValueChange={(value) => setEditingOrdenJob({ ...editingOrdenJob, mode: value })}>
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="manual">Manual only</SelectItem>
-                        <SelectItem value="fixed">Fixed time</SelectItem>
+                        <SelectItem value="manual">{t("settings.orden.modeManual")}</SelectItem>
+                        <SelectItem value="fixed">{t("settings.orden.modeFixed")}</SelectItem>
                         <SelectItem value="cron">Cron</SelectItem>
-                        <SelectItem value="interval">Interval</SelectItem>
-                        <SelectItem value="monitor">Continuous monitor</SelectItem>
+                        <SelectItem value="interval">{t("settings.orden.modeInterval")}</SelectItem>
+                        <SelectItem value="monitor">{t("settings.orden.modeMonitor")}</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
                   <div className="flex items-end gap-4">
-                    <Label className="flex items-center gap-2 text-sm"><Switch checked={editingOrdenJob.enabled} onCheckedChange={(checked) => setEditingOrdenJob({ ...editingOrdenJob, enabled: checked })} /> Enabled</Label>
-                    <Label className="flex items-center gap-2 text-sm"><Switch checked={editingOrdenJob.simulate} onCheckedChange={(checked) => setEditingOrdenJob({ ...editingOrdenJob, simulate: checked })} /> Simulate</Label>
+                    <Label className="flex items-center gap-2 text-sm"><Switch checked={editingOrdenJob.enabled} onCheckedChange={(checked) => setEditingOrdenJob({ ...editingOrdenJob, enabled: checked })} /> {t("settings.orden.enabled")}</Label>
+                    <Label className="flex items-center gap-2 text-sm"><Switch checked={editingOrdenJob.simulate} onCheckedChange={(checked) => setEditingOrdenJob({ ...editingOrdenJob, simulate: checked })} /> {t("settings.orden.simulate")}</Label>
                   </div>
-                  <div>
+                  {editingOrdenJob.mode === "cron" && <div>
                     <Label className="mb-1 block text-xs text-muted-foreground">Cron</Label>
                     <Input value={editingOrdenJob.cron_expr || ""} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, cron_expr: e.target.value })} placeholder="0 * * * *" />
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <Label className="mb-1 block text-xs text-muted-foreground">Fixed time</Label>
+                  </div>}
+                  {editingOrdenJob.mode === "fixed" && <div>
+                      <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.fixedTime")}</Label>
                       <Input type="time" value={editingOrdenJob.fixed_time || ""} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, fixed_time: e.target.value || null })} />
-                    </div>
-                    <div>
-                      <Label className="mb-1 block text-xs text-muted-foreground">Interval min</Label>
+                  </div>}
+                  {editingOrdenJob.mode === "interval" && <div>
+                      <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.intervalMinutes")}</Label>
                       <Input type="number" min={1} value={editingOrdenJob.interval_minutes} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, interval_minutes: parseInt(e.target.value, 10) || 60 })} />
-                    </div>
-                  </div>
+                  </div>}
                   <div>
                     <Label className="mb-1 block text-xs text-muted-foreground">Tags</Label>
                     <Input value={editingOrdenJob.tags} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, tags: e.target.value })} />
                   </div>
                   <div>
-                    <Label className="mb-1 block text-xs text-muted-foreground">Skip tags</Label>
+                    <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.skipTags")}</Label>
                     <Input value={editingOrdenJob.skip_tags} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, skip_tags: e.target.value })} />
                   </div>
                   <div>
-                    <Label className="mb-1 block text-xs text-muted-foreground">Condition: path exists</Label>
+                    <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.pathExists")}</Label>
                     <Input value={editingOrdenJob.path_exists || ""} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, path_exists: e.target.value || null })} placeholder="~/Downloads" />
                   </div>
                   <div className="grid grid-cols-3 gap-2">
                     <div>
-                      <Label className="mb-1 block text-xs text-muted-foreground">Min files</Label>
+                      <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.minFiles")}</Label>
                       <Input type="number" min={0} value={editingOrdenJob.min_file_count} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, min_file_count: parseInt(e.target.value, 10) || 0 })} />
                     </div>
                     <div>
-                      <Label className="mb-1 block text-xs text-muted-foreground">Window start</Label>
+                      <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.windowStart")}</Label>
                       <Input type="time" value={editingOrdenJob.time_window_start || ""} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, time_window_start: e.target.value || null })} />
                     </div>
                     <div>
-                      <Label className="mb-1 block text-xs text-muted-foreground">Window end</Label>
+                      <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.windowEnd")}</Label>
                       <Input type="time" value={editingOrdenJob.time_window_end || ""} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, time_window_end: e.target.value || null })} />
                     </div>
                   </div>
                   <div className="md:col-span-2">
-                    <Label className="mb-1 block text-xs text-muted-foreground">Monitor paths, one per line</Label>
+                    <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.monitorPaths")}</Label>
                     <textarea value={editingOrdenJob.watch_paths} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, watch_paths: e.target.value })} className="min-h-20 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-xs leading-5 text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20" />
                   </div>
                   <div className="flex gap-2 md:col-span-2">
-                    <Button onClick={handleSaveOrdenJob}><Save size={14} /> Save job</Button>
-                    <Button onClick={() => setEditingOrdenJob(null)} variant="outline"><X size={14} /> Cancel</Button>
+                    <Button onClick={handleSaveOrdenJob}><Save size={14} /> {t("settings.orden.saveTask")}</Button>
+                    <Button onClick={() => setEditingOrdenJob(null)} variant="outline"><X size={14} /> {t("common.cancel")}</Button>
                   </div>
                 </div>
               )}
-              <div className="space-y-2">
-                {ordenJobsRows.length === 0 ? <div className="text-xs text-muted-foreground">No automation jobs yet.</div> : ordenJobsRows.map((job) => (
-                  <Card key={job.id || job.name} className="p-3 text-xs">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 space-y-1">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="font-medium">{job.name}</span>
-                          <Badge variant={job.enabled ? "secondary" : "outline"}>{job.mode}</Badge>
-                          {job.simulate && <Badge variant="secondary">sim</Badge>}
-                        </div>
-                        <div className="truncate text-muted-foreground">{job.config_name} · {job.cron_expr || job.fixed_time || `${job.interval_minutes}m`}</div>
-                        <div className="line-clamp-2 text-muted-foreground">{job.watch_paths || "no monitor paths"}</div>
-                      </div>
-                      <div className="flex shrink-0 gap-1">
-                        <Button onClick={() => handleRunOrdenJob(job)} disabled={ordenBusy} variant="ghost" size="icon"><Play size={14} /></Button>
-                        <Button onClick={() => setEditingOrdenJob(job)} variant="ghost" size="icon"><Save size={14} /></Button>
-                        <Button onClick={() => handleDeleteOrdenJob(job)} variant="ghost" size="icon" className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 size={14} /></Button>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
+              <div className="overflow-hidden rounded-lg border border-border">
+                <Table>
+                  <TableHeader><TableRow><TableHead>{t("settings.orden.task")}</TableHead><TableHead>{t("settings.orden.config")}</TableHead><TableHead>{t("settings.orden.triggerMode")}</TableHead><TableHead>{t("settings.orden.status")}</TableHead><TableHead>{t("settings.orden.lastRun")}</TableHead><TableHead className="text-right">{t("settings.orden.actions")}</TableHead></TableRow></TableHeader>
+                  <TableBody>
+                    {ordenJobsRows.map((job) => (
+                      <TableRow key={job.id || job.name}>
+                        <TableCell><div className="font-medium">{job.name}</div>{job.simulate && <div className="mt-1 text-xs text-muted-foreground">{t("settings.orden.simulate")}</div>}</TableCell>
+                        <TableCell className="text-muted-foreground">{job.config_name}</TableCell>
+                        <TableCell><Badge variant="outline">{job.mode}</Badge></TableCell>
+                        <TableCell><div className="flex items-center gap-2"><Switch checked={job.enabled} onCheckedChange={(enabled) => ordenSaveJob({ ...job, enabled }).then(() => ordenJobs()).then(setOrdenJobsRows)} aria-label={t("settings.orden.toggleTask", { name: job.name })} /><span className="text-xs text-muted-foreground">{job.enabled ? t("settings.orden.running") : t("settings.orden.stopped")}</span></div></TableCell>
+                        <TableCell className="text-xs text-muted-foreground">{job.last_run_at ? new Date(job.last_run_at).toLocaleString() : "—"}</TableCell>
+                        <TableCell><div className="flex justify-end gap-1"><Button onClick={() => handleRunOrdenJob(job)} disabled={ordenBusy} variant="ghost" size="icon" aria-label={t("settings.orden.runTask", { name: job.name })}><Play size={14} /></Button><Button onClick={() => setEditingOrdenJob(job)} variant="ghost" size="icon" aria-label={t("settings.orden.editTask", { name: job.name })}><Pencil size={14} /></Button><Button onClick={() => handleDeleteOrdenJob(job)} variant="ghost" size="icon" aria-label={t("settings.orden.deleteTask", { name: job.name })} className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 size={14} /></Button></div></TableCell>
+                      </TableRow>
+                    ))}
+                    {ordenJobsRows.length === 0 && <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted-foreground">{t("settings.orden.noTasks")}</TableCell></TableRow>}
+                  </TableBody>
+                </Table>
               </div>
-            </Card>
+            </Card>}
 
+            {ordenView === "editor" && <>
             <Card className="space-y-2 p-4">
               <div className="flex items-center justify-between">
                 <Label className="text-sm font-medium">{t("settings.orden.history")}</Label>
@@ -1436,249 +1589,20 @@ export default function Settings() {
                     </Button>
                   </div>
                   {ordenVisual.rules.map((rule, idx) => (
-                    <Card key={rule.id} className="space-y-3 p-4">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <Label className="mb-1 block text-xs text-muted-foreground">
-                            {t("settings.orden.ruleName", { number: idx + 1 })}
-                          </Label>
-                          <Input
-                            value={rule.name}
-                            onChange={(e) => updateOrdenVisualRule(rule.id, { name: e.target.value })}
-                          />
-                        </div>
-                        <Switch
-                          checked={rule.enabled}
-                          onCheckedChange={(checked) => updateOrdenVisualRule(rule.id, { enabled: checked })}
-                        />
-                        <Button
-                          onClick={() => handleRemoveOrdenVisualRule(rule.id)}
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        >
-                          <Trash2 size={14} />
-                        </Button>
-                      </div>
-
-                      <div className="grid gap-3 md:grid-cols-2">
-                        <div>
-                          <Label className="mb-1 block text-xs text-muted-foreground">
-                            {t("settings.orden.locations")}
-                          </Label>
-                          <textarea
-                            value={rule.location}
-                            onChange={(e) => updateOrdenVisualRule(rule.id, { location: e.target.value })}
-                            placeholder="~/Downloads"
-                            className="min-h-20 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-xs leading-5 text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-                          />
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <Button
-                              onClick={() => handleChooseOrdenLocations(rule.id, false)}
-                              variant="outline"
-                              size="sm"
-                            >
-                              <FileCheck2 size={14} />
-                              {t("settings.orden.chooseFiles")}
-                            </Button>
-                            <Button
-                              onClick={() => handleChooseOrdenLocations(rule.id, true)}
-                              variant="outline"
-                              size="sm"
-                            >
-                              <FolderOpen size={14} />
-                              {t("settings.orden.chooseFolders")}
-                            </Button>
-                          </div>
-                        </div>
-                        <div className="grid gap-3 sm:grid-cols-[1fr_10rem]">
-                          <div>
-                            <Label className="mb-1 block text-xs text-muted-foreground">
-                              {t("settings.orden.extensions")}
-                            </Label>
-                            <Input
-                              value={rule.extensions}
-                              onChange={(e) => updateOrdenVisualRule(rule.id, { extensions: e.target.value })}
-                              placeholder="pdf, docx, xlsx"
-                            />
-                          </div>
-                          <div>
-                            <Label className="mb-1 block text-xs text-muted-foreground">
-                              {t("settings.orden.filterMode")}
-                            </Label>
-                            <Select
-                              value={rule.filterMode || "all"}
-                              onValueChange={(value) => updateOrdenVisualRule(rule.id, { filterMode: value })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">{t("settings.orden.filterAll")}</SelectItem>
-                                <SelectItem value="any">{t("settings.orden.filterAny")}</SelectItem>
-                                <SelectItem value="none">{t("settings.orden.filterNone")}</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-                        </div>
-                        <div>
-                          <Label className="mb-1 block text-xs text-muted-foreground">
-                            {t("settings.orden.action")}
-                          </Label>
-                          <Select
-                            value={rule.action}
-                            onValueChange={(value) => updateOrdenVisualRule(rule.id, { action: value })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="copy">{t("settings.orden.actionCopy")}</SelectItem>
-                              <SelectItem value="move">{t("settings.orden.actionMove")}</SelectItem>
-                              <SelectItem value="rename">{t("settings.orden.actionRename")}</SelectItem>
-                              <SelectItem value="extract">{t("settings.orden.actionExtract")}</SelectItem>
-                              <SelectItem value="compress">{t("settings.orden.actionCompress")}</SelectItem>
-                              <SelectItem value="echo">{t("settings.orden.actionEcho")}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="mb-1 block text-xs text-muted-foreground">
-                            {t("settings.orden.destinations")}
-                          </Label>
-                          <textarea
-                            value={rule.destination}
-                            onChange={(e) => updateOrdenVisualRule(rule.id, { destination: e.target.value })}
-                            placeholder="~/Documents/Shelfy Backups/"
-                            className="min-h-20 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-xs leading-5 text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-                          />
-                          <div className="mt-2 flex flex-wrap gap-2">
-                            <Button
-                              onClick={() => handleChooseOrdenDestinations(rule.id)}
-                              variant="outline"
-                              size="sm"
-                            >
-                              <FolderOpen size={14} />
-                              {t("settings.orden.chooseDestinations")}
-                            </Button>
-                          </div>
-                        </div>
-                        {["extract", "compress"].includes(rule.action) && (
-                          <>
-                            <div>
-                              <Label className="mb-1 block text-xs text-muted-foreground">
-                                {t("settings.orden.archiveFormat")}
-                              </Label>
-                              <Select
-                                value={rule.archiveFormat || "auto"}
-                                onValueChange={(value) => updateOrdenVisualRule(rule.id, { archiveFormat: value })}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="auto">{t("settings.orden.archiveFormatAuto")}</SelectItem>
-                                  <SelectItem value="zip">ZIP</SelectItem>
-                                  <SelectItem value="7z">7z</SelectItem>
-                                  <SelectItem value="rar">RAR</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <div>
-                              <Label className="mb-1 block text-xs text-muted-foreground">
-                                {rule.action === "extract"
-                                  ? t("settings.orden.archivePasswords")
-                                  : t("settings.orden.archivePassword")}
-                              </Label>
-                              <Input
-                                value={rule.action === "extract" ? rule.archivePasswords : rule.archivePassword}
-                                onChange={(e) =>
-                                  updateOrdenVisualRule(
-                                    rule.id,
-                                    rule.action === "extract"
-                                      ? { archivePasswords: e.target.value }
-                                      : { archivePassword: e.target.value }
-                                  )
-                                }
-                                placeholder={rule.action === "extract" ? "123456, password" : "optional password"}
-                                type="password"
-                              />
-                            </div>
-                            <div>
-                              <Label className="mb-1 block text-xs text-muted-foreground">
-                                {t("settings.orden.onConflict")}
-                              </Label>
-                              <Select
-                                value={rule.onConflict || "rename_new"}
-                                onValueChange={(value) => updateOrdenVisualRule(rule.id, { onConflict: value })}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="rename_new">rename_new</SelectItem>
-                                  <SelectItem value="skip">skip</SelectItem>
-                                  <SelectItem value="overwrite">overwrite</SelectItem>
-                                  <SelectItem value="trash">trash</SelectItem>
-                                  <SelectItem value="rename_existing">rename_existing</SelectItem>
-                                  <SelectItem value="deduplicate">deduplicate</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                            <Label className="flex items-center gap-2 self-end text-sm">
-                              <Checkbox
-                                checked={rule.deleteOriginal || false}
-                                onCheckedChange={(checked) =>
-                                  updateOrdenVisualRule(rule.id, { deleteOriginal: checked === true })
-                                }
-                              />
-                              {t("settings.orden.deleteOriginal")}
-                            </Label>
-                          </>
-                        )}
-                        <div>
-                          <Label className="mb-1 block text-xs text-muted-foreground">
-                            {t("settings.orden.targets")}
-                          </Label>
-                          <Select
-                            value={rule.targets}
-                            onValueChange={(value) => updateOrdenVisualRule(rule.id, { targets: value })}
-                          >
-                            <SelectTrigger>
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="files">{t("settings.orden.targetFiles")}</SelectItem>
-                              <SelectItem value="dirs">{t("settings.orden.targetDirs")}</SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="mb-1 block text-xs text-muted-foreground">
-                            {t("settings.orden.tags")}
-                          </Label>
-                          <Input
-                            value={rule.tags}
-                            onChange={(e) => updateOrdenVisualRule(rule.id, { tags: e.target.value })}
-                            placeholder="backup, docs"
-                          />
-                        </div>
-                      </div>
-
-                      <Label className="flex items-center gap-2 text-sm">
-                        <Checkbox
-                          checked={rule.subfolders}
-                          onCheckedChange={(checked) =>
-                            updateOrdenVisualRule(rule.id, { subfolders: checked === true })
-                          }
-                        />
-                        {t("settings.orden.subfolders")}
-                      </Label>
-                    </Card>
+                    <OrdenVisualRuleCard
+                      key={rule.id}
+                      rule={rule}
+                      index={idx}
+                      onUpdate={updateOrdenVisualRule}
+                      onRemove={handleRemoveOrdenVisualRule}
+                      onChooseLocations={handleChooseOrdenLocations}
+                      onChooseDestinations={handleChooseOrdenDestinations}
+                    />
                   ))}
                 </div>
               )}
             </div>
+            </>}
 
               </>
             )}
@@ -1729,7 +1653,8 @@ export default function Settings() {
           <IgnoreTab />
         )}
 
-      </div>
+        </div>
+      </main>
     </div>
   );
 }

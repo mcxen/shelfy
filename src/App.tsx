@@ -1,13 +1,13 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { initI18n, SupportedLang } from "./i18n";
 import { useAppStore } from "./store/useAppStore";
-import Popup from "./components/Popup";
-import Settings from "./components/Settings";
 import { TooltipProvider } from "./components/ui/tooltip";
-import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { onAction } from "@tauri-apps/plugin-notification";
+
+const Popup = lazy(() => import("./components/Popup"));
+const Settings = lazy(() => import("./components/Settings"));
 
 function applyTheme(theme: string) {
   const root = document.documentElement;
@@ -31,6 +31,7 @@ function App() {
   const { loadSettings, settings } = useAppStore();
 
   const hash = window.location.hash.replace("#/", "") || "popup";
+  const route = hash.split("?", 1)[0];
 
   useEffect(() => {
     async function boot() {
@@ -51,12 +52,6 @@ function App() {
   }, [settings?.theme]);
 
   useEffect(() => {
-    const unlisten = listen("file-organized", (event) => {
-      console.log("File organized:", event.payload);
-      useAppStore.getState().loadLogs();
-      useAppStore.getState().loadStats();
-    });
-
     let actionListener: { unregister: () => Promise<void> } | null = null;
 
     // Listen for notification action clicks centrally
@@ -89,7 +84,6 @@ function App() {
     window.addEventListener("focus", handleFocus);
 
     return () => {
-      unlisten.then((f) => f());
       window.removeEventListener("focus", handleFocus);
       if (actionListener) {
         actionListener.unregister().catch(console.error);
@@ -107,8 +101,10 @@ function App() {
 
   return (
     <TooltipProvider delayDuration={250}>
-      <div className="h-full w-full isolate overflow-hidden rounded-xl bg-background text-foreground ring-1 ring-border/70 shadow-2xl">
-        {hash === "settings" ? <Settings /> : <Popup />}
+      <div className="h-full w-full isolate overflow-hidden rounded-xl bg-background/72 text-foreground ring-1 ring-border/60 shadow-2xl">
+        <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-muted-foreground">{t("app.loading")}</div>}>
+          {route === "settings" ? <Settings /> : <Popup />}
+        </Suspense>
       </div>
     </TooltipProvider>
   );

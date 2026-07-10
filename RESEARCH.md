@@ -196,6 +196,7 @@ GUI：
 - `src/store/useAppStore.ts` 提供 `ordenList/load/save/delete/check/run`
 - `src/components/Settings.tsx` 的 `Advanced` tab 提供配置选择、配置名、Visual/Source 双模式 YAML 编辑器、tags/skip-tags、Check/Simulate/Run 和日志输出
 - Visual 模式覆盖常见备份/整理规则；Source 模式保留完整 Orden YAML 能力
+- Settings 的 `Rules` tab 管理 SQLite 基础规则：多条规则按 priority 排序，支持创建/更新/启停/删除；watcher 对新文件执行第一条启用且匹配的规则。该入口定位为 Orden 的轻量实时监控版本。
 
 ## 6.4 Scheduler / Cron / Keepalive
 
@@ -256,6 +257,14 @@ MCP tools：
 - MCP disabled 时 `tools/list` 返回空列表
 - 写工具单独受 `mcp_allow_write` 控制
 - stdio 模式不监听网络端口；HTTP 字段只是客户端配置/桥接准备
+
+## 6.6 桌面 UI 与 tray 运行策略
+
+- Settings 使用顶部浮动导航；玻璃模糊仅用于窗口外壳和导航，Card 使用半透明背景但不逐层叠加 `backdrop-filter`。
+- Popup 与 Settings 按路由动态加载。Tauri 不再预建隐藏 `main` WebView；自启动时只运行 watcher/scheduler/tray，需要时再创建窗口。
+- Settings 仅在首次进入 tab 时加载该页数据；Orden 列表预取每份配置一条最近记录，详情按需加载完整历史与 YAML。
+- Popup 失焦后停止轮询和前端事件刷新；显示时以 15 秒刷新 pending files、60 秒刷新 Orden quick tasks，重新获得焦点时立即同步。
+- tray 左键打开 Popup、双击打开 Settings；右键菜单提供监控状态、主面板、立即整理、Orden 自动化、监控目录、设置和退出。耗时整理操作在线程中执行，避免阻塞 tray 事件循环。
 
 ### 6.3 History / Undo 约束
 

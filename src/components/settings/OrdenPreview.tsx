@@ -49,7 +49,7 @@ export function OrdenPreview({ ordenResult, ordenPreviewError, onBack }: OrdenPr
         )}
       </Card>
 
-      <div className="grid gap-4 xl:grid-cols-2">
+      <div className="grid gap-4 md:grid-cols-2">
         <Card className="p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">{t("settings.orden.previewSource")}</h3>

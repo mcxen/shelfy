@@ -57,9 +57,11 @@ export function IgnoreTab() {
   };
 
   return (
-    <div className="w-full max-w-4xl space-y-6">
-      <h2 className="text-lg font-semibold">{t("settings.ignore.rulesTitle")}</h2>
-      <p className="text-sm text-muted-foreground">{t("settings.ignore.description")}</p>
+    <div className="w-full space-y-4">
+      <div>
+        <h2 className="text-lg font-semibold">{t("settings.ignore.rulesTitle")}</h2>
+        <p className="text-xs text-muted-foreground">{t("settings.ignore.description")}</p>
+      </div>
 
       <div>
         <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.ignore.folder")}</Label>

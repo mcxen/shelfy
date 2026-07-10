@@ -145,6 +145,7 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] Settings 增加 Advanced/Orden YAML 配置面板（保存、校验、模拟、运行、日志）
 - [ ] 动作执行后写 `db::log_action` 保持 UI 历史/undo 一致（move/rename 已接入；copy/delete/trash/shell 需设计 undo 语义）
 - [x] 与现有 `rules.rs` 并存（简单 DB 规则继续用，YAML 高级规则走 orden）
+- [x] 基础 Rules 重构为多规则配置表，支持创建、编辑、更新、保存、启停、历史和删除，并自动生成功能说明
 
 ### 阶段 5：验证
 - [x] `cargo test` 编译和单元测试通过（当前 17 个测试）
@@ -169,11 +170,23 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] Visual 模式支持系统选择器多选文件、多选目录、多选目的地
 - [x] Visual 模式支持 AND / OR / NONE 过滤关系，并生成多来源、多目的地 YAML
 - [x] 后端提供 YAML → Visual model 解析接口
+- [x] Advanced/Orden 重构为配置中心：配置与自动化任务分别按表格逐行管理，编辑器/详情/运行结果使用独立视图
+- [x] Orden 自动化任务支持 manual/fixed/cron/interval/monitor 的创建、编辑、启停、立即运行与删除
+- [x] 单条 Orden 配置支持行内试跑、配置预览和分组更多菜单；可视化规则按基础信息、来源筛选、执行动作 Card 归组
 - [x] Settings 增加 MCP 开关、stdio/HTTP 快捷配置和客户端配置片段
 - [x] 新增 `shelfy --mcp` / `shelfy --cli mcp` stdio MCP 服务
 - [x] MCP 写工具由独立 `mcp_allow_write` 控制
 - [ ] Visual 模式保留复杂 YAML 的 round-trip 注释/未知字段
 - [ ] HTTP MCP server/bridge 实现
+
+### 阶段 8：桌面界面与运行性能
+- [x] Settings 从左侧栏改为顶部浮动导航，窗口外壳与 Popup 使用克制的玻璃质感
+- [x] 压缩主内容边距和无效留白，General/Ignore/Orden Preview 使用统一 Card 与响应式布局
+- [x] Popup / Settings 使用动态分包，Settings 数据改为进入对应 tab 后再加载
+- [x] Orden 配置中心仅预取每份配置最近一次结果，进入详情后再加载完整历史与 YAML
+- [x] Popup 后台轮询从 5 秒全量刷新拆为 15 秒 pending / 60 秒 Orden tasks，并在窗口失焦时停止
+- [x] 移除未使用的隐藏 `main` WebView，自启动保持零窗口直到用户打开 UI
+- [x] tray 菜单增加监控状态、主面板、立即整理、Orden 自动化、监控目录和设置；语言/文件夹变化时刷新
 
 ## 关键技术决策
 
@@ -191,7 +204,7 @@ Settings → Advanced 是当前图形入口，支持：
 
 ## 下一步
 
-1. 给 Advanced/Orden 面板补齐其它语言文案（当前英文 key 完整，其它语言走 fallback）
+1. 给 Advanced/Orden 配置中心和任务表补齐其它语言文案（当前中英文 key 完整，其它语言走 fallback）
 2. 为 copy/delete/trash/shell 设计 History/Undo 策略，或显式标记为不可撤销事件
 3. 将 watcher/scheduler 的高级模式接入 orden 配置（当前 Settings/CLI/手动运行已接入）
 4. 增加端到端测试：保存配置 → sim → run → History/Undo

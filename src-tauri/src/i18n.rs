@@ -7,6 +7,10 @@ pub struct TrayI18n {
 impl TrayI18n {
     pub fn new(lang: &str) -> Self {
         let mut strings = HashMap::new();
+        strings.insert("open_shelfy", "Open Shelfy");
+        strings.insert("open_folder", "Open watched folder");
+        strings.insert("automation", "Orden automation");
+        strings.insert("monitoring_status", "Monitoring {active}/{total} folders");
         match lang {
             "pl" => {
                 strings.insert("quit", "Zamknij");
@@ -74,10 +78,25 @@ impl TrayI18n {
                 strings.insert("settings_title", "Shelfyの設定");
                 strings.insert("organized", "{}個のファイルを整理しました");
             }
+            "zh" => {
+                strings.insert("quit", "退出 Shelfy");
+                strings.insert("settings", "设置");
+                strings.insert("clean_now", "立即整理");
+                strings.insert("open_shelfy", "打开 Shelfy");
+                strings.insert("open_folder", "打开监控文件夹");
+                strings.insert("automation", "Orden 自动化");
+                strings.insert("monitoring_status", "正在监控 {active}/{total} 个文件夹");
+                strings.insert("tooltip", "Shelfy 文件整理");
+                strings.insert("tooltip_one_pending", "Shelfy – {} 个文件待处理");
+                strings.insert("tooltip_many_pending", "Shelfy – {} 个文件待处理");
+                strings.insert("popup_title", "Shelfy");
+                strings.insert("settings_title", "Shelfy 设置");
+                strings.insert("organized", "已整理 {} 个文件");
+            }
             _ => {
                 strings.insert("quit", "Quit");
                 strings.insert("settings", "Settings");
-                strings.insert("clean_now", "Quick Tasks");
+                strings.insert("clean_now", "Organize Now");
                 strings.insert("tooltip", "Shelfy");
                 strings.insert("tooltip_one_pending", "Shelfy – {} file waiting");
                 strings.insert("tooltip_many_pending", "Shelfy – {} files waiting");
@@ -91,5 +110,24 @@ impl TrayI18n {
 
     pub fn get<'a>(&self, key: &'a str) -> &'a str {
         self.strings.get(key).copied().unwrap_or(key)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TrayI18n;
+
+    #[test]
+    fn chinese_tray_strings_cover_management_actions() {
+        let i18n = TrayI18n::new("zh");
+        assert_eq!(i18n.get("open_shelfy"), "打开 Shelfy");
+        assert_eq!(i18n.get("automation"), "Orden 自动化");
+        assert!(i18n.get("monitoring_status").contains("{active}"));
+    }
+
+    #[test]
+    fn untranslated_tray_actions_fall_back_to_english() {
+        let i18n = TrayI18n::new("de");
+        assert_eq!(i18n.get("open_folder"), "Open watched folder");
     }
 }

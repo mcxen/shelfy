@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { OrdenQuickTask, useAppStore } from "../store/useAppStore";
 import { BrandMark } from "./BrandMark";
@@ -74,16 +74,23 @@ export default function Popup() {
   } | null>(null);
 
   useEffect(() => {
-    loadLogs();
-    loadStats();
-    loadFolders();
-    getPendingFiles();
-    getOrdenQuickTasks()
-      .then(setOrdenTasks)
-      .catch((e) => console.error("Failed to load Orden quick tasks:", e));
+    const refreshTasks = () => {
+      if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+      getOrdenQuickTasks()
+        .then(setOrdenTasks)
+        .catch((e) => console.error("Failed to load Orden quick tasks:", e));
+    };
+    const refreshPending = () => {
+      if (document.visibilityState !== "visible" || !document.hasFocus()) return;
+      getPendingFiles().catch((e) => console.error("Failed to load pending files:", e));
+    };
+
+    Promise.all([loadLogs(), loadStats(), loadFolders(), getPendingFiles()]).catch(console.error);
+    refreshTasks();
 
     // Listen for file-organized events from Rust watcher — show in-app toast
     const unlisten = listen("file-organized", (event: any) => {
+      if (!document.hasFocus()) return;
       const payload = event.payload;
       if (payload?.success) {
         const destFolder: string = payload.destination_folder || payload.destination;
@@ -101,17 +108,21 @@ export default function Popup() {
       }
     });
 
-    // Poll for pending files in manual-mode folders
-    const interval = setInterval(() => {
-      getPendingFiles();
-      getOrdenQuickTasks()
-        .then(setOrdenTasks)
-        .catch((e) => console.error("Failed to refresh Orden quick tasks:", e));
-    }, 5000);
+    const pendingInterval = window.setInterval(refreshPending, 15000);
+    const taskInterval = window.setInterval(refreshTasks, 60000);
+    const handleFocus = () => {
+      loadLogs();
+      loadStats();
+      refreshPending();
+      refreshTasks();
+    };
+    window.addEventListener("focus", handleFocus);
 
     return () => {
       unlisten.then((f) => f());
-      clearInterval(interval);
+      window.clearInterval(pendingInterval);
+      window.clearInterval(taskInterval);
+      window.removeEventListener("focus", handleFocus);
     };
   }, [loadLogs, loadStats, loadFolders, getPendingFiles, getOrdenQuickTasks]);
 
@@ -139,7 +150,7 @@ export default function Popup() {
   };
 
   const handleOpenOrdenSettings = async () => {
-    await invoke("show_settings_cmd");
+    await invoke("show_settings_cmd", { section: "advanced" });
   };
 
   const handleOpenDownloads = async () => {
@@ -161,12 +172,16 @@ export default function Popup() {
     invoke("close_popup");
   };
 
-  const totalStats = stats.reduce((sum, s) => sum + s.count, 0);
+  const totalStats = useMemo(() => stats.reduce((sum, stat) => sum + stat.count, 0), [stats]);
+  const visibleStats = useMemo(
+    () => [...stats].sort((left, right) => right.count - left.count).slice(0, 4),
+    [stats]
+  );
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-xl border border-border/80 bg-background text-foreground shadow-lg">
+    <div className="glass-panel flex h-full flex-col overflow-hidden rounded-xl text-foreground">
       {/* Header */}
-      <div data-tauri-drag-region className="flex items-center justify-between border-b border-border/70 bg-card px-4 py-3">
+      <div data-tauri-drag-region className="flex items-center justify-between border-b border-border/60 bg-card/45 px-3 py-2.5">
         <BrandMark showLabel />
         <Tooltip>
           <TooltipTrigger asChild>
@@ -179,7 +194,7 @@ export default function Popup() {
       </div>
 
       {/* Quick tasks */}
-      <div className="flex flex-col gap-2 p-3">
+      <div className="flex flex-col gap-2 px-3 py-2.5">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs font-semibold uppercase text-muted-foreground">
             <ListChecks size={14} />
@@ -346,7 +361,7 @@ export default function Popup() {
             {t("popup.weeklyStats")}
           </div>
           <div className="flex flex-col gap-1.5">
-            {stats.map((s) => {
+            {visibleStats.map((s) => {
               const pct = totalStats > 0 ? Math.round((s.count / totalStats) * 100) : 0;
               return (
                 <div key={s.file_type} className="flex items-center gap-2 text-xs">

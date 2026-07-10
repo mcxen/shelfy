@@ -8,8 +8,15 @@ pub fn get_settings_cmd() -> Result<AppSettings, String> {
 }
 
 #[tauri::command]
-pub fn update_settings_cmd(settings: AppSettings) -> Result<(), String> {
-    update_settings(&settings).map_err(|e| e.to_string())
+pub fn update_settings_cmd(app: AppHandle, settings: AppSettings) -> Result<(), String> {
+    let language_changed = get_settings()
+        .map(|current| current.language != settings.language)
+        .unwrap_or(true);
+    update_settings(&settings).map_err(|e| e.to_string())?;
+    if language_changed {
+        crate::tray::refresh_tray_menu(&app);
+    }
+    Ok(())
 }
 
 #[tauri::command]

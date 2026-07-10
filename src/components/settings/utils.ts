@@ -7,7 +7,7 @@ import {
 
 export type GraceUnit = "seconds" | "minutes" | "hours";
 export type OrdenEditorMode = "visual" | "source";
-export type OrdenView = "editor" | "preview" | "detail";
+export type OrdenView = "list" | "editor" | "preview" | "detail";
 export type McpDraft = Pick<
   AppSettings,
   | "mcp_enabled"
