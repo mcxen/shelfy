@@ -1,5 +1,5 @@
 use crate::db::{
-    clear_logs, get_db, get_recent_logs, get_undoable_logs, get_weekly_stats, ActionLog,
+    clear_logs, delete_log, get_db, get_recent_logs, get_undoable_logs, get_weekly_stats, ActionLog,
 };
 use crate::AppState;
 use std::time::Instant;
@@ -72,4 +72,9 @@ pub fn undo_all_cmd(state: tauri::State<AppState>) -> Result<i32, String> {
 #[tauri::command]
 pub fn clear_logs_cmd() -> Result<(), String> {
     clear_logs().map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn delete_log_cmd(id: i64) -> Result<(), String> {
+    delete_log(id).map_err(|e| e.to_string())
 }

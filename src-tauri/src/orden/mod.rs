@@ -217,9 +217,27 @@ impl Rule {
         opts: &ExecuteOptions,
         output: &dyn Output,
     ) -> ReportSummary {
+        let rule_resource = Resource::standalone(rule_nr, self.name.clone());
         if !self.enabled {
+            output.msg(
+                &rule_resource,
+                "Rule disabled; skipped",
+                "rule",
+                Level::Info,
+            );
             return ReportSummary::default();
         }
+        output.msg(
+            &rule_resource,
+            &format!(
+                "Rule started ({} filters, {} actions, simulate={})",
+                self.filter_defs.len(),
+                self.action_defs.len(),
+                opts.simulate
+            ),
+            "rule",
+            Level::Info,
+        );
         let mut summary = ReportSummary::default();
 
         // standalone mode (no locations)
@@ -229,6 +247,15 @@ impl Rule {
                 output.msg(&res, &e, "rule", Level::Error);
                 summary.errors += 1;
             }
+            output.msg(
+                &res,
+                &format!(
+                    "Rule finished: {} matched, {} errors",
+                    summary.success, summary.errors
+                ),
+                "rule",
+                Level::Info,
+            );
             return summary;
         }
 
@@ -300,15 +327,53 @@ impl Rule {
                     Ok(p) => p,
                     Err(e) => {
                         summary.errors += 1;
-                        eprintln!("error expanding location path {}: {}", path_str, e);
+                        let res = Resource::new(
+                            PathBuf::from(path_str),
+                            opts.working_dir.clone(),
+                            rule_nr,
+                            self.name.clone(),
+                        );
+                        output.msg(
+                            &res,
+                            &format!("Cannot expand location: {}", e),
+                            "walker",
+                            Level::Error,
+                        );
                         continue;
                     }
                 };
                 let base = resolve_location_path(&expanded, &opts.working_dir);
-                let entries = match self.targets {
-                    Targets::Files => walker.files(&base.to_string_lossy()),
-                    Targets::Dirs => walker.dirs(&base.to_string_lossy()),
+                let location_resource =
+                    Resource::new(base.clone(), base.clone(), rule_nr, self.name.clone());
+                output.msg(
+                    &location_resource,
+                    &format!("Scanning {}", base.display()),
+                    "walker",
+                    Level::Info,
+                );
+                let (entries, walk_errors) = match self.targets {
+                    Targets::Files => walker.files_with_errors(&base.to_string_lossy()),
+                    Targets::Dirs => walker.dirs_with_errors(&base.to_string_lossy()),
                 };
+                output.msg(
+                    &location_resource,
+                    &format!("Found {} candidate items", entries.len()),
+                    "walker",
+                    Level::Info,
+                );
+                for error in walk_errors {
+                    let res = Resource::new(error.path, base.clone(), rule_nr, self.name.clone());
+                    let message = if error.permission_denied {
+                        format!(
+                            "{}; permission denied. On macOS, grant Files and Folders or Full Disk Access.",
+                            error.message
+                        )
+                    } else {
+                        error.message
+                    };
+                    output.msg(&res, &message, "walker", Level::Error);
+                    summary.errors += 1;
+                }
                 for p in entries {
                     if skip_pathes.contains(&p) {
                         continue;
@@ -325,6 +390,7 @@ impl Rule {
                     if !matched {
                         continue;
                     }
+                    output.msg(&res, "Filters matched", "filter", Level::Info);
                     match self.run_actions_with(&mut res, opts, &mut actions, output) {
                         Ok(()) => {
                             for sp in &res.walker_skip_pathes {
@@ -340,6 +406,19 @@ impl Rule {
                 }
             }
         }
+        output.msg(
+            &rule_resource,
+            &format!(
+                "Rule finished: {} matched, {} errors",
+                summary.success, summary.errors
+            ),
+            "rule",
+            if summary.errors > 0 {
+                Level::Warn
+            } else {
+                Level::Info
+            },
+        );
         summary
     }
 
@@ -389,6 +468,12 @@ impl Config {
         let mut summary = ReportSummary::default();
         for (i, rule) in self.rules.iter().enumerate() {
             if !should_execute(&rule.tags, &opts.tags, &opts.skip_tags) {
+                output.msg(
+                    &Resource::standalone(i as i64, rule.name.clone()),
+                    "Rule skipped by tags/skip-tags selection",
+                    "rule",
+                    Level::Info,
+                );
                 continue;
             }
             let s = rule.execute(i as i64, opts, output);

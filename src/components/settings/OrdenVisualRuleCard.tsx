@@ -8,6 +8,7 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
+import { OrdenPipelineEditor } from "./OrdenPipelineEditor";
 
 interface OrdenVisualRuleCardProps {
   rule: OrdenVisualRule;
@@ -15,7 +16,7 @@ interface OrdenVisualRuleCardProps {
   onUpdate: (id: string, patch: Partial<OrdenVisualRule>) => void;
   onRemove: (id: string) => void;
   onChooseLocations: (id: string, directory: boolean) => void;
-  onChooseDestinations: (id: string) => void;
+  onChooseDestinations: (id: string, stepId: string) => void;
 }
 
 export function OrdenVisualRuleCard({
@@ -141,20 +142,7 @@ export function OrdenVisualRuleCard({
                   </Button>
                 </div>
               </div>
-              <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_10rem]">
-                <div>
-                  <Label htmlFor={fieldId("extensions")} className="mb-1 block text-xs text-muted-foreground">
-                    {t("settings.orden.extensions")}
-                  </Label>
-                  <Input
-                    id={fieldId("extensions")}
-                    type="text"
-                    value={rule.extensions}
-                    onChange={(event) => onUpdate(rule.id, { extensions: event.target.value })}
-                    placeholder="pdf, docx, xlsx"
-                  />
-                </div>
-                <div>
+              <div>
                   <Label htmlFor={fieldId("filter-mode")} className="mb-1 block text-xs text-muted-foreground">
                     {t("settings.orden.filterMode")}
                   </Label>
@@ -166,8 +154,12 @@ export function OrdenVisualRuleCard({
                       <SelectItem value="none">{t("settings.orden.filterNone")}</SelectItem>
                     </SelectContent>
                   </Select>
-                </div>
               </div>
+              <OrdenPipelineEditor
+                mode="filter"
+                steps={rule.filterSteps || []}
+                onChange={(filterSteps) => onUpdate(rule.id, { filterSteps })}
+              />
             </CardContent>
           </Card>
 
@@ -177,92 +169,12 @@ export function OrdenVisualRuleCard({
               <CardDescription className="text-xs">{t("settings.orden.actionSettingsDesc")}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
-              <div>
-                <Label htmlFor={fieldId("action")} className="mb-1 block text-xs text-muted-foreground">
-                  {t("settings.orden.action")}
-                </Label>
-                <Select value={rule.action} onValueChange={(value) => onUpdate(rule.id, { action: value })}>
-                  <SelectTrigger id={fieldId("action")}><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="copy">{t("settings.orden.actionCopy")}</SelectItem>
-                    <SelectItem value="move">{t("settings.orden.actionMove")}</SelectItem>
-                    <SelectItem value="rename">{t("settings.orden.actionRename")}</SelectItem>
-                    <SelectItem value="extract">{t("settings.orden.actionExtract")}</SelectItem>
-                    <SelectItem value="compress">{t("settings.orden.actionCompress")}</SelectItem>
-                    <SelectItem value="echo">{t("settings.orden.actionEcho")}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label htmlFor={fieldId("destinations")} className="mb-1 block text-xs text-muted-foreground">
-                  {t("settings.orden.destinations")}
-                </Label>
-                <textarea
-                  id={fieldId("destinations")}
-                  value={rule.destination}
-                  onChange={(event) => onUpdate(rule.id, { destination: event.target.value })}
-                  placeholder="~/Documents/Shelfy Backups/"
-                  className="min-h-24 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-xs leading-5 text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20"
-                />
-                <Button type="button" onClick={() => onChooseDestinations(rule.id)} variant="outline" size="sm" className="mt-2">
-                  <FolderOpen size={14} />
-                  {t("settings.orden.chooseDestinations")}
-                </Button>
-              </div>
-
-              {["extract", "compress"].includes(rule.action) && (
-                <div className="grid gap-3 border-t border-border pt-3 sm:grid-cols-2">
-                  <div>
-                    <Label htmlFor={fieldId("archive-format")} className="mb-1 block text-xs text-muted-foreground">
-                      {t("settings.orden.archiveFormat")}
-                    </Label>
-                    <Select value={rule.archiveFormat || "auto"} onValueChange={(value) => onUpdate(rule.id, { archiveFormat: value })}>
-                      <SelectTrigger id={fieldId("archive-format")}><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="auto">{t("settings.orden.archiveFormatAuto")}</SelectItem>
-                        <SelectItem value="zip">ZIP</SelectItem>
-                        <SelectItem value="7z">7z</SelectItem>
-                        <SelectItem value="rar">RAR</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label htmlFor={fieldId("archive-password")} className="mb-1 block text-xs text-muted-foreground">
-                      {rule.action === "extract" ? t("settings.orden.archivePasswords") : t("settings.orden.archivePassword")}
-                    </Label>
-                    <Input
-                      id={fieldId("archive-password")}
-                      type="password"
-                      value={rule.action === "extract" ? rule.archivePasswords : rule.archivePassword}
-                      onChange={(event) => onUpdate(rule.id, rule.action === "extract" ? { archivePasswords: event.target.value } : { archivePassword: event.target.value })}
-                      placeholder={rule.action === "extract" ? "123456, password" : "optional password"}
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor={fieldId("conflict")} className="mb-1 block text-xs text-muted-foreground">
-                      {t("settings.orden.onConflict")}
-                    </Label>
-                    <Select value={rule.onConflict || "rename_new"} onValueChange={(value) => onUpdate(rule.id, { onConflict: value })}>
-                      <SelectTrigger id={fieldId("conflict")}><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="rename_new">rename_new</SelectItem>
-                        <SelectItem value="skip">skip</SelectItem>
-                        <SelectItem value="overwrite">overwrite</SelectItem>
-                        <SelectItem value="trash">trash</SelectItem>
-                        <SelectItem value="rename_existing">rename_existing</SelectItem>
-                        <SelectItem value="deduplicate">deduplicate</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Label className="flex items-center gap-2 self-end text-sm">
-                    <Checkbox
-                      checked={rule.deleteOriginal || false}
-                      onCheckedChange={(checked) => onUpdate(rule.id, { deleteOriginal: checked === true })}
-                    />
-                    {t("settings.orden.deleteOriginal")}
-                  </Label>
-                </div>
-              )}
+              <OrdenPipelineEditor
+                mode="action"
+                steps={rule.actionSteps || []}
+                onChange={(actionSteps) => onUpdate(rule.id, { actionSteps })}
+                onChooseDestination={(stepId) => onChooseDestinations(rule.id, stepId)}
+              />
             </CardContent>
           </Card>
         </div>

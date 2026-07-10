@@ -31,4 +31,24 @@ impl crate::orden::Action for Delete {
         res.path = None;
         Ok(())
     }
+
+    fn pipeline_with_output(
+        &mut self,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
+        let path = res.path.clone().ok_or("delete: no path")?;
+        let log_resource = res.clone();
+        let result = self.pipeline(res, simulate);
+        if result.is_ok() {
+            output.msg(
+                &log_resource,
+                &format!("Delete {}", path.display()),
+                "delete",
+                Level::Info,
+            );
+        }
+        result
+    }
 }

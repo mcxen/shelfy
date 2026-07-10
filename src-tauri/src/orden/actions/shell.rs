@@ -97,4 +97,23 @@ impl Action for Shell {
         }
         Ok(())
     }
+
+    fn pipeline_with_output(
+        &mut self,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
+        let command = template::render(&self.cmd, &res.dict())?;
+        let result = self.pipeline(res, simulate);
+        if result.is_ok() {
+            let message = if simulate && !self.run_in_simulation {
+                format!("Not run in simulation: $ {}", command)
+            } else {
+                format!("Executed: $ {}", command)
+            };
+            output.msg(res, &message, "shell", Level::Info);
+        }
+        result
+    }
 }

@@ -146,3 +146,10 @@ pub fn clear_logs() -> SqliteResult<()> {
     conn.execute("DELETE FROM action_logs", [])?;
     Ok(())
 }
+
+pub fn delete_log(id: i64) -> SqliteResult<()> {
+    let db = get_db();
+    let conn = db.lock().unwrap();
+    conn.execute("DELETE FROM action_logs WHERE id=?1", params![id])?;
+    Ok(())
+}

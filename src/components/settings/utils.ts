@@ -2,6 +2,7 @@ import {
   AppSettings,
   OrdenRunResult,
   OrdenVisualConfig,
+  OrdenVisualStep,
   ScheduleSettings,
 } from "../../store/useAppStore";
 
@@ -121,6 +122,22 @@ export function defaultOrdenVisualConfig(): OrdenVisualConfig {
         archivePasswords: "",
         deleteOriginal: false,
         onConflict: "rename_new",
+        filterSteps: [
+          {
+            id: `filter-${Date.now()}`,
+            kind: "extension",
+            value: "[pdf]",
+            inverted: false,
+          },
+        ],
+        actionSteps: [
+          {
+            id: `action-${Date.now()}`,
+            kind: "copy",
+            value: "~/Documents/Shelfy Backups/PDF/",
+            inverted: false,
+          },
+        ],
       },
     ],
   };
@@ -207,31 +224,43 @@ export function visualToOrdenYaml(config: OrdenVisualConfig): string {
       lines.push(`      - ${yamlQuote(location)}`);
     });
     lines.push(`    subfolders: ${rule.subfolders ? "true" : "false"}`);
-    const extensions = listFromCsv(rule.extensions);
-    if (extensions.length > 0) {
+    const legacyExtensions = listFromCsv(rule.extensions);
+    const filterSteps: OrdenVisualStep[] = rule.filterSteps ?? legacyExtensions.map((extension, index) => ({
+      id: `legacy-filter-${index}`,
+      kind: "extension",
+      value: yamlQuote(extension),
+      inverted: false,
+    }));
+    if (filterSteps.length > 0) {
       lines.push(`    filter_mode: ${rule.filterMode || "all"}`);
       lines.push("    filters:");
-      lines.push(`      - extension: [${extensions.map(yamlQuote).join(", ")}]`);
+      filterSteps.forEach((step) => appendVisualStep(lines, "      ", step));
     }
     lines.push("    actions:");
-    const destinations = listFromPathText(rule.destination || "~/Documents/Shelfy Backups/");
-    if (rule.action === "copy") {
-      const actionDestinations = destinations.length > 0 ? destinations : ["~/Documents/Shelfy Backups/"];
-      if (actionDestinations.length === 1) {
-        lines.push(`      - copy: ${yamlQuote(actionDestinations[0])}`);
-      } else {
-        lines.push("      - copy:");
-        lines.push("          dest:");
-        actionDestinations.forEach((destination) => lines.push(`            - ${yamlQuote(destination)}`));
-        lines.push("          continue_with: original");
-      }
-    } else if (rule.action === "move") {
-      lines.push(`      - move: ${yamlQuote(destinations[0] || "~/Documents/Shelfy Backups/")}`);
-    } else if (rule.action === "rename") {
-      lines.push(`      - rename: ${yamlQuote(destinations[0] || "{name}")}`);
-    } else {
-      lines.push(`      - ${rule.action || "echo"}: ${yamlQuote(destinations[0] || "matched {path}")}`);
-    }
+    const legacyDestinations = listFromPathText(rule.destination || "~/Documents/Shelfy Backups/");
+    const actionSteps: OrdenVisualStep[] = rule.actionSteps ?? [{
+      id: "legacy-action",
+      kind: rule.action || "echo",
+      value: yamlQuote(legacyDestinations[0] || "matched {path}"),
+      inverted: false,
+    }];
+    actionSteps.forEach((step) => appendVisualStep(lines, "      ", step));
   });
   return `${lines.join("\n")}\n`;
+}
+
+function appendVisualStep(lines: string[], indent: string, step: OrdenVisualStep) {
+  const key = `${step.inverted ? "not " : ""}${step.kind || "echo"}`;
+  const value = step.value.trim();
+  if (!value) {
+    lines.push(`${indent}- ${key}`);
+    return;
+  }
+  const valueLines = value.split(/\r?\n/);
+  if (valueLines.length === 1) {
+    lines.push(`${indent}- ${key}: ${valueLines[0]}`);
+    return;
+  }
+  lines.push(`${indent}- ${key}:`);
+  valueLines.forEach((line) => lines.push(`${indent}    ${line}`));
 }

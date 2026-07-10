@@ -1,8 +1,8 @@
 use rusqlite::{params, Result as SqliteResult};
 use serde::{Deserialize, Serialize};
 
-use crate::db::get_db;
 use crate::db::folders::get_watched_folders;
+use crate::db::get_db;
 
 // ---------------------------------------------------------------------------
 // Rule
@@ -212,4 +212,3 @@ pub fn add_rule_record(rule: &Rule, preserve_id: bool) -> SqliteResult<i64> {
     }
     Ok(conn.last_insert_rowid())
 }
-

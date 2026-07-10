@@ -223,7 +223,22 @@ impl FolderWatcher {
 
             // Initial scan: process files that already exist in the folder.
             // This ensures files present before the folder was added are not ignored forever.
-            if let Ok(entries) = std::fs::read_dir(&folder.path) {
+            let entries = match std::fs::read_dir(&folder.path) {
+                Ok(entries) => entries,
+                Err(error) => {
+                    eprintln!("[watcher] Cannot read {}: {}", folder.path, error);
+                    let _ = handle.emit(
+                        "folder-access-error",
+                        serde_json::json!({
+                            "path": folder.path,
+                            "error": error.to_string(),
+                            "permission_denied": error.kind() == std::io::ErrorKind::PermissionDenied,
+                        }),
+                    );
+                    continue;
+                }
+            };
+            {
                 for entry in entries.flatten() {
                     let path = entry.path();
                     if path.is_file()
@@ -282,8 +297,8 @@ impl FolderWatcher {
 
             let mut watcher = RecommendedWatcher::new(
                 move |res: Result<Event, notify::Error>| {
-                    if let Ok(event) = res {
-                        for path in event.paths {
+                    match res {
+                        Ok(event) => for path in event.paths {
                             if path.is_file()
                                 && !should_ignore_file(&path)
                                 && !is_file_ignored_by_shelfyignore(&path)
@@ -334,6 +349,21 @@ impl FolderWatcher {
                                     });
                                 }
                             }
+                        },
+                        Err(error) => {
+                            let _ = h.emit(
+                                "folder-access-error",
+                                serde_json::json!({
+                                    "path": folder_path,
+                                    "error": error.to_string(),
+                                    "permission_denied": error
+                                        .paths
+                                        .first()
+                                        .and_then(|path| std::fs::read_dir(path).err())
+                                        .map(|io_error| io_error.kind() == std::io::ErrorKind::PermissionDenied)
+                                        .unwrap_or(false),
+                                }),
+                            );
                         }
                     }
                 },
@@ -343,9 +373,24 @@ impl FolderWatcher {
             )
             .map_err(|e| e.to_string())?;
 
-            watcher
-                .watch(Path::new(&folder.path), RecursiveMode::NonRecursive)
-                .map_err(|e| e.to_string())?;
+            if let Err(error) = watcher.watch(Path::new(&folder.path), RecursiveMode::NonRecursive)
+            {
+                eprintln!("[watcher] Cannot watch {}: {}", folder.path, error);
+                let _ = handle.emit(
+                    "folder-access-error",
+                    serde_json::json!({
+                        "path": folder.path,
+                        "error": error.to_string(),
+                        "permission_denied": error
+                            .paths
+                            .first()
+                            .and_then(|path| std::fs::read_dir(path).err())
+                            .map(|io_error| io_error.kind() == std::io::ErrorKind::PermissionDenied)
+                            .unwrap_or(false),
+                    }),
+                );
+                continue;
+            }
 
             self.watchers.insert(folder.path.clone(), watcher);
         }

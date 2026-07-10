@@ -19,6 +19,7 @@ import { GeneralTab } from "./settings/GeneralTab";
 import { IgnoreTab } from "./settings/IgnoreTab";
 import { RulesTab } from "./settings/RulesTab";
 import { OrdenPreview } from "./settings/OrdenPreview";
+import { OrdenRunHistoryTable } from "./settings/OrdenRunHistoryTable";
 import { OrdenVisualRuleCard } from "./settings/OrdenVisualRuleCard";
 import { TopNavButton } from "./settings/TopNavButton";
 import {
@@ -39,6 +40,7 @@ import {
   secondsToUnit,
   unitToSeconds,
   visualToOrdenYaml,
+  yamlQuote,
 } from "./settings/utils";
 import { Badge } from "./ui/badge";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "./ui/table";
@@ -77,6 +79,7 @@ import {
   Pencil,
   Search,
   StickyNote,
+  ShieldAlert,
 } from "lucide-react";
 
 
@@ -105,6 +108,7 @@ export default function Settings() {
     updateRule,
     deleteRule,
     clearLogs,
+    deleteHistoryLog,
     undoAction,
     undoAll,
     settings,
@@ -118,6 +122,8 @@ export default function Settings() {
     loadSchedulerLogs,
     clearSchedulerLogs,
     getSystemKeepaliveStatus,
+    validateFolderAccess,
+    openFullDiskAccessSettings,
     installSystemKeepalive,
     uninstallSystemKeepalive,
     exportRules,
@@ -132,6 +138,8 @@ export default function Settings() {
     ordenRun,
     ordenVisualFromYaml,
     ordenHistory,
+    ordenDeleteHistory,
+    ordenClearHistory,
     ordenJobs,
     ordenSaveJob,
     ordenDeleteJob,
@@ -182,12 +190,24 @@ export default function Settings() {
   const [editingOrdenJob, setEditingOrdenJob] = useState<OrdenJob | null>(null);
   const [ordenBusy, setOrdenBusy] = useState(false);
   const [ordenToast, setOrdenToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
+  const [folderAccessError, setFolderAccessError] = useState<{ path: string; error: string; permission_denied: boolean } | null>(null);
+  const isMacOS = /Macintosh|Mac OS X/i.test(navigator.userAgent);
 
   useEffect(() => {
     const unlisten = listen<string>("settings-navigate", (event) => {
       const nextTab = event.payload as Tab;
       if (SETTINGS_TABS.includes(nextTab)) setTab(nextTab);
     });
+    return () => {
+      unlisten.then((dispose) => dispose());
+    };
+  }, []);
+
+  useEffect(() => {
+    const unlisten = listen<{ path: string; error: string; permission_denied: boolean }>(
+      "folder-access-error",
+      (event) => setFolderAccessError(event.payload)
+    );
     return () => {
       unlisten.then((dispose) => dispose());
     };
@@ -343,28 +363,50 @@ export default function Settings() {
   };
 
   const handleChooseFolder = async () => {
-    const selected = await open({ directory: true, multiple: false });
-    const path = Array.isArray(selected) ? selected[0] : selected;
-    if (path) {
-      setNewFolderPath(path);
+    try {
+      const selected = await open({ directory: true, multiple: false });
+      const path = Array.isArray(selected) ? selected[0] : selected;
+      if (path) {
+        const access = await validateFolderAccess(path);
+        if (!access.readable) {
+          setFolderAccessError({
+            path,
+            error: access.error || t("settings.permissions.folderDenied"),
+            permission_denied: access.permission_denied,
+          });
+          return;
+        }
+        setFolderAccessError(null);
+        setNewFolderPath(path);
+      }
+    } catch (error) {
+      setFolderAccessError({
+        path: "",
+        error: String(error || t("settings.permissions.folderDenied")),
+        permission_denied: true,
+      });
     }
   };
 
   const handleChooseDestination = async () => {
     if (!editingRule) return;
-    const selected = await open({ directory: true, multiple: false });
-    const path = Array.isArray(selected) ? selected[0] : selected;
-    if (path) {
-      setEditingRule({ ...editingRule, destination: path });
+    try {
+      const selected = await open({ directory: true, multiple: false });
+      const path = Array.isArray(selected) ? selected[0] : selected;
+      if (path) setEditingRule({ ...editingRule, destination: path });
+    } catch (error) {
+      setFolderAccessError({ path: "", error: String(error), permission_denied: true });
     }
   };
 
   const handleChooseRuleScopeFolder = async () => {
     if (!editingRule) return;
-    const selected = await open({ directory: true, multiple: false });
-    const path = Array.isArray(selected) ? selected[0] : selected;
-    if (path) {
-      setEditingRule({ ...editingRule, folder_id: 0, folder_path: path });
+    try {
+      const selected = await open({ directory: true, multiple: false });
+      const path = Array.isArray(selected) ? selected[0] : selected;
+      if (path) setEditingRule({ ...editingRule, folder_id: 0, folder_path: path });
+    } catch (error) {
+      setFolderAccessError({ path: "", error: String(error), permission_denied: true });
     }
   };
 
@@ -667,30 +709,72 @@ export default function Settings() {
   };
 
   const handleChooseOrdenLocations = async (id: string, directory: boolean) => {
-    const selected = await open({ directory, multiple: true });
-    const paths = normalizeDialogSelection(selected);
-    if (paths.length === 0) return;
-    const rule = ordenVisual.rules.find((item) => item.id === id);
-    updateOrdenVisualRule(id, {
-      location: mergePathText(rule?.location || "", paths),
-    });
+    try {
+      const selected = await open({ directory, multiple: true });
+      const paths = normalizeDialogSelection(selected);
+      if (paths.length === 0) return;
+      if (directory) {
+        const checks = await Promise.all(paths.map(validateFolderAccess));
+        const denied = checks.find((check) => !check.readable);
+        if (denied) {
+          setFolderAccessError({
+            path: denied.path,
+            error: denied.error || t("settings.permissions.folderDenied"),
+            permission_denied: denied.permission_denied,
+          });
+          return;
+        }
+      }
+      setFolderAccessError(null);
+      const rule = ordenVisual.rules.find((item) => item.id === id);
+      updateOrdenVisualRule(id, {
+        location: mergePathText(rule?.location || "", paths),
+      });
+    } catch (error) {
+      setFolderAccessError({ path: "", error: String(error), permission_denied: true });
+    }
   };
 
-  const handleChooseOrdenDestinations = async (id: string) => {
-    const selected = await open({ directory: true, multiple: true });
-    const paths = normalizeDialogSelection(selected);
-    if (paths.length === 0) return;
-    const rule = ordenVisual.rules.find((item) => item.id === id);
-    updateOrdenVisualRule(id, {
-      destination: mergePathText(rule?.destination || "", paths),
-    });
+  const handleChooseOrdenDestinations = async (id: string, stepId: string) => {
+    try {
+      const selected = await open({ directory: true, multiple: true });
+      const paths = normalizeDialogSelection(selected);
+      if (paths.length === 0) return;
+      const checks = await Promise.all(paths.map(validateFolderAccess));
+      const denied = checks.find((check) => !check.readable);
+      if (denied) {
+        setFolderAccessError({
+          path: denied.path,
+          error: denied.error || t("settings.permissions.folderDenied"),
+          permission_denied: denied.permission_denied,
+        });
+        return;
+      }
+      setFolderAccessError(null);
+      const rule = ordenVisual.rules.find((item) => item.id === id);
+      const actionSteps = (rule?.actionSteps || []).map((step) => {
+        if (step.id !== stepId) return step;
+        const value = step.kind === "copy" && paths.length > 1
+          ? `dest:\n${paths.map((path) => `  - ${yamlQuote(path)}`).join("\n")}\ncontinue_with: original`
+          : yamlQuote(paths[0]);
+        return { ...step, value };
+      });
+      updateOrdenVisualRule(id, {
+        destination: mergePathText(rule?.destination || "", paths),
+        actionSteps,
+      });
+    } catch (error) {
+      setFolderAccessError({ path: "", error: String(error), permission_denied: true });
+    }
   };
 
   const handleOrdenSelect = async (name: string) => {
     try {
-      const yaml = await ordenLoad(name);
+      const [yaml, history] = await Promise.all([ordenLoad(name), ordenHistory(name, 100)]);
       setOrdenName(name);
       setOrdenYaml(yaml);
+      setOrdenHistoryRows(history);
+      setOrdenHistoryByConfig((previous) => ({ ...previous, [name]: history }));
       if (ordenEditorMode === "visual") {
         await parseOrdenVisual(yaml);
       }
@@ -834,9 +918,32 @@ export default function Settings() {
       setOrdenResult(result);
       setOrdenView("preview");
       setOrdenJobsRows(await ordenJobs());
+      await refreshOrdenHistory(job.config_name);
+    } catch (error) {
+      setOrdenResult(null);
+      setOrdenPreviewError(String(error || t("settings.orden.runError")));
+      setOrdenView("preview");
+      await refreshOrdenHistory(job.config_name).catch(console.error);
     } finally {
       setOrdenBusy(false);
     }
+  };
+
+  const refreshOrdenHistory = async (name: string) => {
+    const history = await ordenHistory(name, 100);
+    setOrdenHistoryRows(history);
+    setOrdenHistoryByConfig((previous) => ({ ...previous, [name]: history }));
+  };
+
+  const handleDeleteOrdenHistory = async (name: string, id: number) => {
+    await ordenDeleteHistory(id);
+    await refreshOrdenHistory(name);
+  };
+
+  const handleClearOrdenHistory = async (name: string) => {
+    await ordenClearHistory(name);
+    setOrdenHistoryRows([]);
+    setOrdenHistoryByConfig((previous) => ({ ...previous, [name]: [] }));
   };
 
   const runOrdenConfigByName = async (name: string, simulate: boolean) => {
@@ -856,6 +963,7 @@ export default function Settings() {
       setOrdenResult(null);
       setOrdenPreviewError(String(error || t("settings.orden.runError")));
       setOrdenView("preview");
+      await refreshOrdenHistory(name).catch(console.error);
     } finally {
       setOrdenBusy(false);
     }
@@ -902,6 +1010,7 @@ export default function Settings() {
       setOrdenResult(null);
       setOrdenPreviewError(String(e || t("settings.orden.runError")));
       setOrdenView("preview");
+      await refreshOrdenHistory(ordenName).catch(console.error);
       showOrdenToast(String(e || t("settings.orden.runError")), "error");
     } finally {
       setOrdenBusy(false);
@@ -947,9 +1056,11 @@ export default function Settings() {
       <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,color-mix(in_srgb,var(--primary)_12%,transparent),transparent_34%),radial-gradient(circle_at_88%_4%,color-mix(in_srgb,var(--accent)_42%,transparent),transparent_30%)]" />
 
       <header className="relative z-20 shrink-0 px-4 pt-3">
-        <div data-tauri-drag-region className="glass-panel flex h-12 items-center gap-3 rounded-2xl px-3 pl-20">
-          <BrandMark showLabel className="shrink-0" iconClassName="size-7 rounded-md" />
-          <nav className="no-scrollbar mx-auto flex min-w-0 items-center gap-1 overflow-x-auto rounded-xl bg-muted/35 p-1">
+        <div data-tauri-drag-region className="flex h-12 items-center gap-2 pl-20">
+          <div className="glass-panel flex h-11 shrink-0 items-center rounded-2xl px-3">
+            <BrandMark showLabel iconClassName="size-7 rounded-md" />
+          </div>
+          <nav className="glass-panel no-scrollbar mx-auto flex h-11 min-w-0 items-center gap-1 overflow-x-auto rounded-2xl p-1">
           <TopNavButton
             active={tab === "rules"}
             onClick={() => setTab("rules")}
@@ -986,7 +1097,7 @@ export default function Settings() {
             onClick={() => invoke("close_settings")}
             variant="ghost"
             size="icon"
-            className="size-8 shrink-0 rounded-xl text-muted-foreground"
+            className="glass-panel size-10 shrink-0 rounded-2xl text-muted-foreground"
             aria-label={t("settings.close")}
           >
             <X size={15} />
@@ -997,6 +1108,26 @@ export default function Settings() {
       {/* Content */}
       <main className="relative z-10 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-3 [scrollbar-gutter:stable]">
         <div className="mx-auto w-full max-w-[1280px]">
+        {isMacOS && (tab === "rules" || tab === "advanced") && (
+          <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-card/75 px-3 py-2 shadow-sm">
+            <div className="flex min-w-0 items-center gap-2.5">
+              <ShieldAlert size={16} className={folderAccessError ? "shrink-0 text-destructive" : "shrink-0 text-muted-foreground"} />
+              <div className="min-w-0">
+                <div className="text-xs font-medium">
+                  {folderAccessError ? t("settings.permissions.accessError") : t("settings.permissions.title")}
+                </div>
+                <div className="truncate text-xs text-muted-foreground" title={folderAccessError?.error}>
+                  {folderAccessError
+                    ? `${folderAccessError.path ? `${folderAccessError.path} · ` : ""}${folderAccessError.error}`
+                    : t("settings.permissions.desc")}
+                </div>
+              </div>
+            </div>
+            <Button type="button" onClick={() => openFullDiskAccessSettings()} variant="outline" size="sm" className="shrink-0">
+              {t("settings.permissions.openFullDiskAccess")}
+            </Button>
+          </div>
+        )}
         {tab === "rules" && (
           <RulesTab
             rules={rules}
@@ -1061,7 +1192,9 @@ export default function Settings() {
                   )}
                 </Tooltip>
                 <Button
-                  onClick={clearLogs}
+                  onClick={() => {
+                    if (window.confirm(t("settings.history.clearConfirm"))) void clearLogs();
+                  }}
                   variant="destructive"
                 >
                   <Trash2 size={14} />
@@ -1079,14 +1212,26 @@ export default function Settings() {
                 {filteredHistoryLogs.map((log) => (
                   <Card
                     key={log.id}
-                    className={`flex items-center justify-between gap-4 px-4 py-3 ${
+                    className={`grid gap-3 px-4 py-3 md:grid-cols-[minmax(0,1fr)_minmax(15rem,0.85fr)_auto] md:items-center ${
                       log.undone ? "bg-muted opacity-70" : ""
                     }`}
                   >
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-sm font-medium">{log.file_name}</div>
-                      <div className="truncate text-xs text-muted-foreground">
-                        {(log.rule_label || log.file_type)} · {log.action} → {log.destination_path || "-"}
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="truncate text-sm font-medium">{log.file_name}</div>
+                        <Badge variant="outline">{log.engine}</Badge>
+                        <Badge variant="secondary">{log.action}</Badge>
+                      </div>
+                      <div className="mt-1 text-xs text-muted-foreground">
+                        {new Date(log.timestamp).toLocaleString()} · {log.rule_label || log.file_type}
+                      </div>
+                    </div>
+                    <div className="min-w-0 text-xs">
+                      <div className="break-all text-muted-foreground" title={log.source_path}>
+                        {t("settings.history.source")}: {log.source_path}
+                      </div>
+                      <div className="mt-1 break-all" title={log.destination_path || undefined}>
+                        {t("settings.history.destination")}: {log.destination_path || "—"}
                       </div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
@@ -1127,6 +1272,20 @@ export default function Settings() {
                           className="h-auto px-0 text-xs"
                         >
                           {t("settings.history.undo")}
+                        </Button>
+                      )}
+                      {log.id != null && (
+                        <Button
+                          type="button"
+                          onClick={() => {
+                            if (window.confirm(t("settings.history.deleteConfirm"))) void deleteHistoryLog(log.id!);
+                          }}
+                          variant="ghost"
+                          size="icon"
+                          className="size-8 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                          aria-label={t("settings.history.delete")}
+                        >
+                          <Trash2 size={14} />
                         </Button>
                       )}
                     </div>
@@ -1172,15 +1331,22 @@ export default function Settings() {
                       {ordenVisual.rules.map((rule) => <TableRow key={rule.id}>
                         <TableCell><div className="font-medium">{rule.name}</div><div className="text-xs text-muted-foreground">{rule.enabled ? t("settings.orden.enabled") : t("settings.orden.stopped")}</div></TableCell>
                         <TableCell className="max-w-48 truncate text-xs text-muted-foreground" title={rule.location}>{rule.location || "—"}</TableCell>
-                        <TableCell className="text-xs">{rule.extensions || t("settings.orden.noFilter")} · {rule.filterMode || "all"}</TableCell>
-                        <TableCell><Badge variant="outline">{t(`settings.orden.action${rule.action.charAt(0).toUpperCase()}${rule.action.slice(1)}`, { defaultValue: rule.action })}</Badge></TableCell>
-                        <TableCell className="max-w-48 truncate text-xs text-muted-foreground" title={rule.destination}>{rule.destination || "—"}</TableCell>
+                        <TableCell className="text-xs">{rule.filterSteps?.map((step) => `${step.inverted ? "not " : ""}${step.kind}`).join(", ") || rule.extensions || t("settings.orden.noFilter")} · {rule.filterMode || "all"}</TableCell>
+                        <TableCell><div className="flex flex-wrap gap-1">{(rule.actionSteps?.length ? rule.actionSteps : [{ kind: rule.action }]).map((step, index) => <Badge key={`${step.kind}-${index}`} variant="outline">{step.kind}</Badge>)}</div></TableCell>
+                        <TableCell className="max-w-48 truncate text-xs text-muted-foreground" title={rule.actionSteps?.map((step) => step.value).join("\n") || rule.destination}>{rule.actionSteps?.[0]?.value || rule.destination || "—"}</TableCell>
                       </TableRow>)}
                     </TableBody>
                   </Table>
                 </Card>
                 <Card className="space-y-2 p-4"><Label>{t("settings.orden.note")}</Label><textarea value={ordenNotes[ordenDetailName] || ""} onChange={(event) => updateOrdenNote(ordenDetailName, event.target.value)} placeholder={t("settings.orden.notePlaceholder")} className="min-h-24 w-full resize-y rounded-lg border border-border bg-background px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-ring/20" /></Card>
-                <Card className="p-4"><h3 className="mb-3 font-medium">{t("settings.orden.history")}</h3><Table><TableHeader><TableRow><TableHead>{t("settings.orden.time")}</TableHead><TableHead>{t("settings.orden.trigger")}</TableHead><TableHead>{t("settings.orden.mode")}</TableHead><TableHead className="text-right">{t("settings.orden.result")}</TableHead></TableRow></TableHeader><TableBody>{history.map((row) => <TableRow key={row.id || row.timestamp}><TableCell>{new Date(row.timestamp).toLocaleString()}</TableCell><TableCell>{row.trigger}</TableCell><TableCell>{row.simulate ? t("settings.orden.simulate") : t("settings.orden.run")}</TableCell><TableCell className="text-right"><Badge variant="outline" className="gap-1.5"><span className={`size-1.5 rounded-full ${row.errors ? "bg-red-500" : "bg-emerald-500"}`} />{row.success} / {row.errors}</Badge></TableCell></TableRow>)}</TableBody></Table></Card>
+                <Card className="p-4">
+                  <OrdenRunHistoryTable
+                    rows={history}
+                    onRefresh={() => refreshOrdenHistory(ordenDetailName)}
+                    onDelete={(id) => handleDeleteOrdenHistory(ordenDetailName, id)}
+                    onClear={() => handleClearOrdenHistory(ordenDetailName)}
+                  />
+                </Card>
               </div>;
             })() : (
               <>
@@ -1508,27 +1674,13 @@ export default function Settings() {
             </Card>}
 
             {ordenView === "editor" && <>
-            <Card className="space-y-2 p-4">
-              <div className="flex items-center justify-between">
-                <Label className="text-sm font-medium">{t("settings.orden.history")}</Label>
-                <Button onClick={() => ordenHistory(ordenName, 20).then(setOrdenHistoryRows)} variant="outline" size="sm">
-                  {t("settings.scheduler.refreshLogs")}
-                </Button>
-              </div>
-              {ordenHistoryRows.length === 0 ? (
-                <div className="text-xs text-muted-foreground">{t("settings.orden.noHistory")}</div>
-              ) : (
-                <div className="max-h-40 overflow-auto rounded-xl border border-border bg-muted/30">
-                  {ordenHistoryRows.map((row) => (
-                    <div key={row.id} className="grid grid-cols-[150px_80px_70px_minmax(0,1fr)] gap-2 border-b border-border px-3 py-2 text-xs last:border-b-0">
-                      <span className="text-muted-foreground">{new Date(row.timestamp).toLocaleString()}</span>
-                      <span>{row.simulate ? t("settings.orden.simulated") : t("settings.orden.applied")}</span>
-                      <span>{row.success}/{row.errors}</span>
-                      <span className="truncate text-muted-foreground" title={row.logs_json}>{row.trigger}</span>
-                    </div>
-                  ))}
-                </div>
-              )}
+            <Card className="p-4">
+              <OrdenRunHistoryTable
+                rows={ordenHistoryRows}
+                onRefresh={() => refreshOrdenHistory(ordenName)}
+                onDelete={(id) => handleDeleteOrdenHistory(ordenName, id)}
+                onClear={() => handleClearOrdenHistory(ordenName)}
+              />
             </Card>
 
             <div className="space-y-3">

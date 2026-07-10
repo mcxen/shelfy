@@ -32,4 +32,15 @@ impl Action for Echo {
         DefaultOutput.msg(res, &full, "echo", Level::Info);
         Ok(())
     }
+
+    fn pipeline_with_output(
+        &mut self,
+        res: &mut Resource,
+        _simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
+        let full = template::render(&self.msg, &res.dict())?;
+        output.msg(res, &full, "echo", Level::Info);
+        Ok(())
+    }
 }

@@ -118,6 +118,15 @@ export interface SystemKeepaliveStatus {
   platform: string;
 }
 
+export interface FolderAccessStatus {
+  path: string;
+  exists: boolean;
+  is_directory: boolean;
+  readable: boolean;
+  permission_denied: boolean;
+  error: string | null;
+}
+
 // ---- Orden (advanced YAML rules engine) ----
 
 export interface OrdenLog {
@@ -172,6 +181,13 @@ export interface OrdenVisualConfig {
   rules: OrdenVisualRule[];
 }
 
+export interface OrdenVisualStep {
+  id: string;
+  kind: string;
+  value: string;
+  inverted: boolean;
+}
+
 export interface OrdenVisualRule {
   id: string;
   name: string;
@@ -189,6 +205,8 @@ export interface OrdenVisualRule {
   archivePasswords: string;
   deleteOriginal: boolean;
   onConflict: string;
+  filterSteps: OrdenVisualStep[];
+  actionSteps: OrdenVisualStep[];
 }
 
 export interface McpClientConfig {
@@ -244,6 +262,7 @@ interface AppState {
   scanFolder: (path: string) => Promise<{ file: string; rule: string; destination: string }[]>;
   undoAction: (id: number) => Promise<boolean>;
   undoAll: () => Promise<number>;
+  deleteHistoryLog: (id: number) => Promise<void>;
   addFolder: (path: string, mode: string) => Promise<void>;
   removeFolder: (id: number) => Promise<void>;
   updateFolderMode: (id: number, mode: string) => Promise<void>;
@@ -258,6 +277,8 @@ interface AppState {
   loadSchedulerLogs: () => Promise<void>;
   clearSchedulerLogs: () => Promise<void>;
   getSystemKeepaliveStatus: () => Promise<SystemKeepaliveStatus>;
+  validateFolderAccess: (path: string) => Promise<FolderAccessStatus>;
+  openFullDiskAccessSettings: () => Promise<void>;
   installSystemKeepalive: (intervalMinutes: number) => Promise<void>;
   uninstallSystemKeepalive: () => Promise<void>;
   exportRules: (path: string) => Promise<void>;
@@ -273,6 +294,8 @@ interface AppState {
   ordenRun: (yaml: string, simulate: boolean, tags: string[], skipTags: string[]) => Promise<OrdenRunResult>;
   ordenVisualFromYaml: (yaml: string) => Promise<OrdenVisualConfig>;
   ordenHistory: (name: string, limit: number) => Promise<OrdenRunHistory[]>;
+  ordenDeleteHistory: (id: number) => Promise<void>;
+  ordenClearHistory: (name?: string) => Promise<void>;
   ordenJobs: () => Promise<OrdenJob[]>;
   ordenSaveJob: (job: OrdenJob) => Promise<number>;
   ordenDeleteJob: (id: number) => Promise<void>;
@@ -367,6 +390,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     return count;
   },
 
+  deleteHistoryLog: async (id) => {
+    await invoke('delete_log_cmd', { id });
+    await Promise.all([get().loadLogs(), get().loadStats()]);
+  },
+
   addFolder: async (path, mode) => {
     try {
       await invoke('add_folder_cmd', { path, mode });
@@ -458,6 +486,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     return await invoke<SystemKeepaliveStatus>('system_keepalive_status_cmd');
   },
 
+  validateFolderAccess: async (path) => {
+    return await invoke<FolderAccessStatus>('validate_folder_access_cmd', { path });
+  },
+
+  openFullDiskAccessSettings: async () => {
+    await invoke('open_full_disk_access_settings_cmd');
+  },
+
   installSystemKeepalive: async (intervalMinutes) => {
     await invoke('install_system_keepalive_cmd', { intervalMinutes });
   },
@@ -516,6 +552,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
   ordenHistory: async (name, limit) => {
     return await invoke<OrdenRunHistory[]>('orden_history_cmd', { name, limit });
+  },
+  ordenDeleteHistory: async (id) => {
+    await invoke('orden_delete_history_cmd', { id });
+  },
+  ordenClearHistory: async (name) => {
+    await invoke('orden_clear_history_cmd', { name: name || null });
   },
   ordenJobs: async () => {
     return await invoke<OrdenJob[]>('orden_jobs_cmd');

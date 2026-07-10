@@ -22,6 +22,13 @@ pub enum WalkMethod {
     Depth,
 }
 
+#[derive(Debug, Clone)]
+pub struct WalkError {
+    pub path: PathBuf,
+    pub message: String,
+    pub permission_denied: bool,
+}
+
 impl Default for Walker {
     fn default() -> Self {
         Self {
@@ -60,25 +67,50 @@ fn matches_any(name: &str, patterns: &[String]) -> bool {
 
 impl Walker {
     pub fn files(&self, path: &str) -> Vec<PathBuf> {
+        self.files_with_errors(path).0
+    }
+
+    pub fn files_with_errors(&self, path: &str) -> (Vec<PathBuf>, Vec<WalkError>) {
         // a single file is emitted as-is
         if Path::new(path).is_file() {
-            return vec![PathBuf::from(path)];
+            return (vec![PathBuf::from(path)], Vec::new());
         }
         let mut out = Vec::new();
-        self.walk(path, true, false, 0, &mut out);
-        out
+        let mut errors = Vec::new();
+        self.walk(path, true, false, 0, &mut out, &mut errors);
+        (out, errors)
     }
 
     pub fn dirs(&self, path: &str) -> Vec<PathBuf> {
-        let mut out = Vec::new();
-        self.walk(path, false, true, 0, &mut out);
-        out
+        self.dirs_with_errors(path).0
     }
 
-    fn walk(&self, top: &str, files: bool, dirs: bool, lvl: i32, out: &mut Vec<PathBuf>) {
+    pub fn dirs_with_errors(&self, path: &str) -> (Vec<PathBuf>, Vec<WalkError>) {
+        let mut out = Vec::new();
+        let mut errors = Vec::new();
+        self.walk(path, false, true, 0, &mut out, &mut errors);
+        (out, errors)
+    }
+
+    fn walk(
+        &self,
+        top: &str,
+        files: bool,
+        dirs: bool,
+        lvl: i32,
+        out: &mut Vec<PathBuf>,
+        errors: &mut Vec<WalkError>,
+    ) {
         let entries = match std::fs::read_dir(top) {
             Ok(e) => e,
-            Err(_) => return,
+            Err(error) => {
+                errors.push(WalkError {
+                    path: PathBuf::from(top),
+                    message: format!("Cannot read directory: {}", error),
+                    permission_denied: error.kind() == std::io::ErrorKind::PermissionDenied,
+                });
+                return;
+            }
         };
 
         let mut dir_entries: Vec<PathBuf> = Vec::new();
@@ -131,7 +163,7 @@ impl Walker {
                     }
                 }
                 for d in dir_entries {
-                    self.walk(&d.to_string_lossy(), files, dirs, lvl + 1, out);
+                    self.walk(&d.to_string_lossy(), files, dirs, lvl + 1, out, errors);
                 }
             }
             WalkMethod::Depth => {
@@ -147,7 +179,7 @@ impl Walker {
                     }
                 }
                 for d in dir_entries.iter() {
-                    self.walk(&d.to_string_lossy(), files, dirs, lvl + 1, out);
+                    self.walk(&d.to_string_lossy(), files, dirs, lvl + 1, out, errors);
                 }
                 if files {
                     out.extend(file_entries);
@@ -161,5 +193,26 @@ impl Walker {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn inaccessible_or_missing_roots_are_reported() {
+        let path = std::env::temp_dir().join(format!(
+            "shelfy-walker-missing-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let (files, errors) = Walker::default().files_with_errors(&path.to_string_lossy());
+        assert!(files.is_empty());
+        assert_eq!(errors.len(), 1);
+        assert_eq!(errors[0].path, path);
     }
 }

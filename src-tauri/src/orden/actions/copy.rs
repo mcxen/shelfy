@@ -38,16 +38,13 @@ impl Copy {
             continue_with,
         }
     }
-}
 
-impl Action for Copy {
-    fn name(&self) -> &str {
-        "copy"
-    }
-    fn supports_dirs(&self) -> bool {
-        true
-    }
-    fn pipeline(&mut self, res: &mut Resource, simulate: bool) -> Result<(), String> {
+    fn execute(
+        &mut self,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
         let src = res.path.clone().ok_or("copy: no source path")?;
         if self.destinations.is_empty() {
             return Err("copy: at least one destination is required".into());
@@ -56,9 +53,6 @@ impl Action for Copy {
         let source_is_dir = src.is_dir();
         let mut last_destination = None;
         for destination in &self.destinations {
-            // Render every destination against the original resource. This makes a
-            // destination list a fan-out operation instead of copying destination
-            // one into destination two.
             res.path = Some(src.clone());
             let rendered = template::render(destination, &res.dict())?;
             let dst = prepare_target_path(
@@ -72,11 +66,17 @@ impl Action for Copy {
 
             let r = resolve_conflict(&dst, res, self.on_conflict, &self.rename_template, simulate)?;
             if r.skip_action {
+                output.msg(
+                    res,
+                    &format!("Skipped existing {}", dst.display()),
+                    "copy",
+                    Level::Warn,
+                );
                 continue;
             }
             let dst = r.use_dst;
 
-            DefaultOutput.msg(
+            output.msg(
                 res,
                 &format!("Copy to {}", dst.display()),
                 "copy",
@@ -98,6 +98,27 @@ impl Action for Copy {
             _ => Some(src),
         };
         Ok(())
+    }
+}
+
+impl Action for Copy {
+    fn name(&self) -> &str {
+        "copy"
+    }
+    fn supports_dirs(&self) -> bool {
+        true
+    }
+    fn pipeline(&mut self, res: &mut Resource, simulate: bool) -> Result<(), String> {
+        self.execute(res, simulate, &DefaultOutput)
+    }
+
+    fn pipeline_with_output(
+        &mut self,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
+        self.execute(res, simulate, output)
     }
 }
 

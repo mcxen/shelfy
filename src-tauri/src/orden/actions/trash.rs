@@ -27,4 +27,23 @@ impl Action for Trash {
         }
         Ok(())
     }
+
+    fn pipeline_with_output(
+        &mut self,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
+        let path = res.path.clone().ok_or("trash: no path")?;
+        let result = self.pipeline(res, simulate);
+        if result.is_ok() {
+            output.msg(
+                res,
+                &format!("Trash {}", path.display()),
+                "trash",
+                Level::Info,
+            );
+        }
+        result
+    }
 }

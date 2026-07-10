@@ -15,7 +15,13 @@ pub fn get_folders_cmd() -> Result<Vec<WatchedFolder>, String> {
 
 #[tauri::command]
 pub fn add_folder_cmd(app: tauri::AppHandle, path: String, mode: String) -> Result<i64, String> {
-    let _ = std::fs::create_dir_all(&path);
+    let metadata = std::fs::metadata(&path)
+        .map_err(|error| format!("Cannot access watched folder '{}': {}", path, error))?;
+    if !metadata.is_dir() {
+        return Err(format!("Watched path is not a folder: {}", path));
+    }
+    std::fs::read_dir(&path)
+        .map_err(|error| format!("Cannot read watched folder '{}': {}", path, error))?;
     let id = add_watched_folder(&path, &mode).map_err(|e| e.to_string())?;
     if let Some(state) = app.try_state::<crate::AppState>() {
         let mut watcher = state.watcher.lock().unwrap();

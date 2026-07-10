@@ -76,4 +76,23 @@ impl Action for Symlink {
         }
         Ok(())
     }
+
+    fn pipeline_with_output(
+        &mut self,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
+        let destination = template::render(&self.dest, &res.dict())?;
+        let result = self.pipeline(res, simulate);
+        if result.is_ok() {
+            output.msg(
+                res,
+                &format!("Create symlink at {}", destination),
+                "symlink",
+                Level::Info,
+            );
+        }
+        result
+    }
 }

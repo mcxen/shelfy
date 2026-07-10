@@ -107,6 +107,24 @@ pub fn list_orden_config_names() -> SqliteResult<Vec<String>> {
     rows
 }
 
+pub fn list_orden_configs() -> SqliteResult<Vec<OrdenConfigRecord>> {
+    let db = get_db();
+    let conn = db.lock().unwrap();
+    let mut stmt = conn.prepare(
+        "SELECT id, name, yaml, created_at, updated_at FROM orden_configs ORDER BY name ASC",
+    )?;
+    let rows = stmt.query_map([], |row| {
+        Ok(OrdenConfigRecord {
+            id: row.get(0)?,
+            name: row.get(1)?,
+            yaml: row.get(2)?,
+            created_at: parse_utc_ts(row.get(3)?)?,
+            updated_at: parse_utc_ts(row.get(4)?)?,
+        })
+    })?;
+    rows.collect()
+}
+
 pub fn get_orden_config(name: &str) -> SqliteResult<Option<OrdenConfigRecord>> {
     let db = get_db();
     let conn = db.lock().unwrap();
@@ -269,4 +287,49 @@ pub fn get_orden_run_logs(config_name: &str, limit: i64) -> SqliteResult<Vec<Ord
         })?
         .collect();
     rows
+}
+
+pub fn get_recent_orden_run_logs(limit: i64) -> SqliteResult<Vec<OrdenRunLog>> {
+    let db = get_db();
+    let conn = db.lock().unwrap();
+    let mut stmt = conn.prepare(
+        "SELECT id, config_name, timestamp, simulate, success, errors, trigger, logs_json
+         FROM orden_run_logs
+         ORDER BY timestamp DESC
+         LIMIT ?1",
+    )?;
+    let rows = stmt.query_map(params![limit], |row| {
+        Ok(OrdenRunLog {
+            id: row.get(0)?,
+            config_name: row.get(1)?,
+            timestamp: parse_utc_ts(row.get(2)?)?,
+            simulate: row.get::<_, i32>(3)? != 0,
+            success: row.get(4)?,
+            errors: row.get(5)?,
+            trigger: row.get(6)?,
+            logs_json: row.get(7)?,
+        })
+    })?;
+    rows.collect()
+}
+
+pub fn delete_orden_run_log(id: i64) -> SqliteResult<()> {
+    let db = get_db();
+    let conn = db.lock().unwrap();
+    conn.execute("DELETE FROM orden_run_logs WHERE id=?1", params![id])?;
+    Ok(())
+}
+
+pub fn clear_orden_run_logs(config_name: Option<&str>) -> SqliteResult<()> {
+    let db = get_db();
+    let conn = db.lock().unwrap();
+    if let Some(config_name) = config_name {
+        conn.execute(
+            "DELETE FROM orden_run_logs WHERE config_name=?1",
+            params![config_name],
+        )?;
+    } else {
+        conn.execute("DELETE FROM orden_run_logs", [])?;
+    }
+    Ok(())
 }

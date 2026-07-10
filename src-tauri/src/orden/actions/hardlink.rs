@@ -67,4 +67,23 @@ impl Action for Hardlink {
         }
         Ok(())
     }
+
+    fn pipeline_with_output(
+        &mut self,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
+        let destination = template::render(&self.dest, &res.dict())?;
+        let result = self.pipeline(res, simulate);
+        if result.is_ok() {
+            output.msg(
+                res,
+                &format!("Create hardlink at {}", destination),
+                "hardlink",
+                Level::Info,
+            );
+        }
+        result
+    }
 }

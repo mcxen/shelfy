@@ -114,4 +114,18 @@ impl Action for Write {
         }
         Ok(())
     }
+
+    fn pipeline_with_output(
+        &mut self,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
+        let path = template::render(&self.outfile, &res.dict())?;
+        let result = self.pipeline(res, simulate);
+        if result.is_ok() {
+            output.msg(res, &format!("Write to {}", path), "write", Level::Info);
+        }
+        result
+    }
 }

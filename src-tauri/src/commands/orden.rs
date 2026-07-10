@@ -54,6 +54,19 @@ pub struct OrdenVisualRule {
     delete_original: bool,
     #[serde(rename = "onConflict", default = "default_on_conflict")]
     on_conflict: String,
+    #[serde(rename = "filterSteps", default)]
+    filter_steps: Vec<OrdenVisualStep>,
+    #[serde(rename = "actionSteps", default)]
+    action_steps: Vec<OrdenVisualStep>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct OrdenVisualStep {
+    id: String,
+    kind: String,
+    value: String,
+    #[serde(default)]
+    inverted: bool,
 }
 
 fn default_filter_mode() -> String {
@@ -153,15 +166,21 @@ pub fn orden_run_cmd(
     tags: Vec<String>,
     skip_tags: Vec<String>,
 ) -> Result<OrdenRunResult, String> {
+    let config_name =
+        find_orden_config_name_for_yaml(&yaml).unwrap_or_else(|| "<ad-hoc>".to_string());
     let opts = crate::orden::ExecuteOptions {
         simulate,
         tags: tags.into_iter().collect(),
         skip_tags: skip_tags.into_iter().collect(),
         working_dir: std::env::current_dir().unwrap_or_default(),
     };
-    let r = crate::orden::run_yaml(&yaml, &opts)?;
-    let config_name =
-        find_orden_config_name_for_yaml(&yaml).unwrap_or_else(|| "<ad-hoc>".to_string());
+    let r = match crate::orden::run_yaml(&yaml, &opts) {
+        Ok(result) => result,
+        Err(error) => {
+            log_orden_failure(&config_name, simulate, "manual", &error);
+            return Err(error);
+        }
+    };
     let _ = log_orden_run(
         &config_name,
         simulate,
@@ -236,8 +255,60 @@ fn parse_visual_rule(idx: usize, value: &serde_yaml::Value) -> Result<OrdenVisua
             "on_conflict",
             "rename_new",
         ),
+        filter_steps: parse_visual_steps(yaml_get(mapping, "filters"), "filter", true),
+        action_steps: parse_visual_steps(yaml_get(mapping, "actions"), "action", false),
         action,
     })
+}
+
+fn parse_visual_steps(
+    value: Option<&serde_yaml::Value>,
+    id_prefix: &str,
+    allow_inverted: bool,
+) -> Vec<OrdenVisualStep> {
+    let Some(sequence) = value.and_then(|value| value.as_sequence()) else {
+        return Vec::new();
+    };
+    sequence
+        .iter()
+        .enumerate()
+        .filter_map(|(index, item)| {
+            let (raw_kind, value) = if let Some(kind) = item.as_str() {
+                (kind.to_string(), serde_yaml::Value::Null)
+            } else {
+                let mapping = item.as_mapping()?;
+                let (key, value) = mapping.iter().next()?;
+                (key.as_str()?.to_string(), value.clone())
+            };
+            let (kind, inverted) = if allow_inverted {
+                raw_kind
+                    .strip_prefix("not ")
+                    .map(|kind| (kind.to_string(), true))
+                    .unwrap_or((raw_kind, false))
+            } else {
+                (raw_kind, false)
+            };
+            Some(OrdenVisualStep {
+                id: format!("{}-{}", id_prefix, index + 1),
+                kind,
+                value: yaml_value_for_editor(&value),
+                inverted,
+            })
+        })
+        .collect()
+}
+
+fn yaml_value_for_editor(value: &serde_yaml::Value) -> String {
+    if value.is_null() {
+        return String::new();
+    }
+    let serialized = serde_yaml::to_string(value).unwrap_or_default();
+    let trimmed = serialized.trim();
+    trimmed
+        .strip_prefix("---\n")
+        .unwrap_or(trimmed)
+        .trim()
+        .to_string()
 }
 
 fn yaml_get<'a>(mapping: &'a serde_yaml::Mapping, key: &str) -> Option<&'a serde_yaml::Value> {
@@ -442,6 +513,16 @@ pub fn orden_history_cmd(name: String, limit: i64) -> Result<Vec<OrdenRunLog>, S
 }
 
 #[tauri::command]
+pub fn orden_delete_history_cmd(id: i64) -> Result<(), String> {
+    delete_orden_run_log(id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn orden_clear_history_cmd(name: Option<String>) -> Result<(), String> {
+    clear_orden_run_logs(name.as_deref()).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn orden_jobs_cmd() -> Result<Vec<OrdenJob>, String> {
     list_orden_jobs().map_err(|e| e.to_string())
 }
@@ -477,7 +558,13 @@ pub fn orden_run_job_cmd(job: OrdenJob) -> Result<OrdenRunResult, String> {
         skip_tags: split_csv(&job.skip_tags).into_iter().collect(),
         working_dir: std::env::current_dir().unwrap_or_default(),
     };
-    let r = crate::orden::run_yaml(&yaml, &opts)?;
+    let r = match crate::orden::run_yaml(&yaml, &opts) {
+        Ok(result) => result,
+        Err(error) => {
+            log_orden_failure(&job.config_name, job.simulate, "manual-job", &error);
+            return Err(error);
+        }
+    };
     let _ = log_orden_run(
         &job.config_name,
         job.simulate,
@@ -514,4 +601,56 @@ fn split_csv(value: &str) -> Vec<String> {
         .filter(|s| !s.is_empty())
         .map(ToString::to_string)
         .collect()
+}
+
+fn log_orden_failure(config_name: &str, simulate: bool, trigger: &str, error: &str) {
+    let logs = serde_json::json!([{
+        "level": "error",
+        "sender": "orden",
+        "rule_nr": -1,
+        "path": "<config>",
+        "msg": error,
+    }]);
+    let _ = log_orden_run(config_name, simulate, 0, 1, trigger, &logs.to_string());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn visual_parser_keeps_complete_filter_and_action_pipelines() {
+        let yaml = r#"
+rules:
+  - name: pipeline
+    locations: [~/Downloads]
+    filters:
+      - extension: [pdf, docx]
+      - not size: "> 10 MB"
+      - created:
+          days: 30
+          mode: older
+    actions:
+      - copy:
+          dest: [~/Backup/A, ~/Backup/B]
+          continue_with: original
+      - shell:
+          cmd: "echo {path}"
+          run_in_simulation: false
+"#;
+
+        let visual = orden_visual_from_yaml_cmd(yaml.to_string()).unwrap();
+        let rule = &visual.rules[0];
+        assert_eq!(rule.filter_steps.len(), 3);
+        assert_eq!(rule.filter_steps[0].kind, "extension");
+        assert_eq!(rule.filter_steps[1].kind, "size");
+        assert!(rule.filter_steps[1].inverted);
+        assert!(rule.filter_steps[2].value.contains("days: 30"));
+        assert_eq!(rule.action_steps.len(), 2);
+        assert_eq!(rule.action_steps[0].kind, "copy");
+        assert!(rule.action_steps[0]
+            .value
+            .contains("continue_with: original"));
+        assert_eq!(rule.action_steps[1].kind, "shell");
+    }
 }

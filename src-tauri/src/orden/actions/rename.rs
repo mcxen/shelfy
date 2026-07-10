@@ -21,16 +21,13 @@ impl Rename {
             rename_template,
         }
     }
-}
 
-impl Action for Rename {
-    fn name(&self) -> &str {
-        "rename"
-    }
-    fn supports_dirs(&self) -> bool {
-        true
-    }
-    fn pipeline(&mut self, res: &mut Resource, simulate: bool) -> Result<(), String> {
+    fn execute(
+        &mut self,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
         let src = res.path.clone().ok_or("rename: no source path")?;
         let new_name = template::render(&self.new_name, &res.dict())?;
         if new_name.contains('/') || new_name.contains('\\') {
@@ -39,13 +36,18 @@ impl Action for Rename {
         let dst = src.with_file_name(new_name);
         let r = resolve_conflict(&dst, res, self.on_conflict, &self.rename_template, simulate)?;
         if r.skip_action {
+            output.msg(
+                res,
+                &format!("Skipped existing {}", dst.display()),
+                "rename",
+                Level::Warn,
+            );
             return Ok(());
         }
         let dst = r.use_dst;
-
-        DefaultOutput.msg(
+        output.msg(
             res,
-            &format!("Renaming to {}", dst.display()),
+            &format!("Rename to {}", dst.display()),
             "rename",
             Level::Info,
         );
@@ -56,5 +58,26 @@ impl Action for Rename {
         res.path = Some(dst.clone());
         res.walker_skip_pathes.insert(dst);
         Ok(())
+    }
+}
+
+impl Action for Rename {
+    fn name(&self) -> &str {
+        "rename"
+    }
+    fn supports_dirs(&self) -> bool {
+        true
+    }
+    fn pipeline(&mut self, res: &mut Resource, simulate: bool) -> Result<(), String> {
+        self.execute(res, simulate, &DefaultOutput)
+    }
+
+    fn pipeline_with_output(
+        &mut self,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
+        self.execute(res, simulate, output)
     }
 }

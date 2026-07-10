@@ -75,7 +75,27 @@ fn run_job_summary(job: &OrdenJob, trigger: &str) -> Result<(usize, usize), Stri
         &format!("Orden job '{}' started", job.name),
         Some(json!({ "trigger": trigger, "job": job.name, "config": job.config_name, "mode": job.mode }).to_string()),
     );
-    let result = run_job_result(job, trigger)?;
+    let result = match run_job_result(job, trigger) {
+        Ok(result) => result,
+        Err(error) => {
+            let logs = json!([{
+                "level": "error",
+                "sender": "orden",
+                "rule_nr": -1,
+                "path": "<config>",
+                "msg": error.clone(),
+            }]);
+            let _ = crate::db::log_orden_run(
+                &job.config_name,
+                job.simulate,
+                0,
+                1,
+                trigger,
+                &logs.to_string(),
+            );
+            return Err(error);
+        }
+    };
     let _ = crate::db::log_orden_run(
         &job.config_name,
         job.simulate,

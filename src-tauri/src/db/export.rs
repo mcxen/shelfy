@@ -2,8 +2,10 @@ use rusqlite::Result as SqliteResult;
 use serde::{Deserialize, Serialize};
 
 use crate::db::{
-    folders::{delete_all_watched_folders, get_watched_folders, add_watched_folder_record, WatchedFolder},
-    rules::{delete_all_rules, get_rules, add_rule_record, Rule},
+    folders::{
+        add_watched_folder_record, delete_all_watched_folders, get_watched_folders, WatchedFolder,
+    },
+    rules::{add_rule_record, delete_all_rules, get_rules, Rule},
     settings::{get_settings, update_settings, AppSettings},
 };
 

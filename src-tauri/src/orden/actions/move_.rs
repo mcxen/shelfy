@@ -29,16 +29,13 @@ impl Move {
             autodetect_folder,
         }
     }
-}
 
-impl Action for Move {
-    fn name(&self) -> &str {
-        "move"
-    }
-    fn supports_dirs(&self) -> bool {
-        true
-    }
-    fn pipeline(&mut self, res: &mut Resource, simulate: bool) -> Result<(), String> {
+    fn execute(
+        &mut self,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
         let src = res.path.clone().ok_or("move: no source path")?;
         let rendered = template::render(&self.dest, &res.dict())?;
         let dst = prepare_target_path(
@@ -49,14 +46,18 @@ impl Action for Move {
             self.autodetect_folder,
             simulate,
         )?;
-
         let r = resolve_conflict(&dst, res, self.on_conflict, &self.rename_template, simulate)?;
         if r.skip_action {
+            output.msg(
+                res,
+                &format!("Skipped existing {}", dst.display()),
+                "move",
+                Level::Warn,
+            );
             return Ok(());
         }
         let dst = r.use_dst;
-
-        DefaultOutput.msg(
+        output.msg(
             res,
             &format!("Move to {}", dst.display()),
             "move",
@@ -64,15 +65,40 @@ impl Action for Move {
         );
         res.walker_skip_pathes.insert(dst.clone());
         if !simulate {
-            // try atomic rename, fallback to copy+remove for cross-device
-            if let Err(e) = std::fs::rename(&src, &dst) {
+            if let Err(error) = std::fs::rename(&src, &dst) {
                 std::fs::copy(&src, &dst).map_err(|e| e.to_string())?;
                 std::fs::remove_file(&src).map_err(|e| e.to_string())?;
-                let _ = e;
+                output.msg(
+                    res,
+                    &format!("Atomic move unavailable ({}); used copy + remove", error),
+                    "move",
+                    Level::Warn,
+                );
             }
             crate::orden::actions::log_history("move", &src, &dst, res.rule_name.clone());
         }
         res.path = Some(dst);
         Ok(())
+    }
+}
+
+impl Action for Move {
+    fn name(&self) -> &str {
+        "move"
+    }
+    fn supports_dirs(&self) -> bool {
+        true
+    }
+    fn pipeline(&mut self, res: &mut Resource, simulate: bool) -> Result<(), String> {
+        self.execute(res, simulate, &DefaultOutput)
+    }
+
+    fn pipeline_with_output(
+        &mut self,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<(), String> {
+        self.execute(res, simulate, output)
     }
 }

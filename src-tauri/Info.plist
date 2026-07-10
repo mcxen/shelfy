@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>NSDesktopFolderUsageDescription</key>
+  <string>Shelfy needs access to organize files in Desktop folders you configure.</string>
+  <key>NSDocumentsFolderUsageDescription</key>
+  <string>Shelfy needs access to organize and back up files in Documents folders you configure.</string>
+  <key>NSDownloadsFolderUsageDescription</key>
+  <string>Shelfy needs access to organize files in your Downloads folder.</string>
+  <key>NSNetworkVolumesUsageDescription</key>
+  <string>Shelfy needs access to organize files on network volumes you configure.</string>
+  <key>NSRemovableVolumesUsageDescription</key>
+  <string>Shelfy needs access to organize files on removable volumes you configure.</string>
+</dict>
+</plist>

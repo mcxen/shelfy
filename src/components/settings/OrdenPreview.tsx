@@ -109,14 +109,14 @@ export function OrdenPreview({ ordenResult, ordenPreviewError, onBack }: OrdenPr
             ) : (
               <div className="divide-y divide-border">
                 {ordenResult.logs.map((log, idx) => (
-                  <div key={idx} className="grid grid-cols-[70px_90px_minmax(0,1fr)] gap-2 px-3 py-2 text-xs">
-                    <span className={log.level === "error" ? "text-destructive" : "text-muted-foreground"}>
-                      {log.level}
-                    </span>
-                    <span className="text-muted-foreground">{log.sender}</span>
-                    <span className="min-w-0 truncate" title={`${log.path} ${log.msg}`}>
-                      {log.path} · {log.msg}
-                    </span>
+                  <div key={idx} className="grid gap-1 px-3 py-3 text-xs md:grid-cols-[2.5rem_5rem_7rem_minmax(0,1fr)]">
+                    <span className="text-muted-foreground">{idx + 1}</span>
+                    <span className={log.level === "error" ? "text-destructive" : "text-muted-foreground"}>{log.level}</span>
+                    <span className="text-muted-foreground">{log.sender} · #{log.rule_nr + 1}</span>
+                    <div className="min-w-0">
+                      <div className="break-all font-mono text-[11px] text-muted-foreground">{log.path}</div>
+                      <div className="mt-1 break-words text-foreground">{log.msg}</div>
+                    </div>
                   </div>
                 ))}
               </div>
