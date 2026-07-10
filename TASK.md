@@ -52,7 +52,8 @@ src-tauri/src/orden/
 
 - `orden::Config::from_string(yaml)`：解析 YAML 配置。
 - `orden::Config::execute(&ExecuteOptions, &dyn Output)`：执行配置并返回 `ReportSummary`。
-- `orden::run_yaml(yaml, &ExecuteOptions)`：Tauri/调用方常用入口，返回 `RunResult { success, errors, simulate, logs }`。
+- `orden::run_yaml(yaml, &ExecuteOptions)`：后台 worker 使用的同步执行原语，返回 `RunResult { success, errors, simulate, logs }`。
+- `orden_runtime::spawn(work)`：将阻塞的 Orden 执行派发到独立线程，返回任务句柄；通过任务状态读取结果。
 - `orden::list_config_names/load_config_text/save_config_text/delete_config`：管理 `<data_dir>/orden/*.yaml`。配置名只允许字母、数字、`-`、`_`，禁止路径分隔符和 `..`。
 - `ExecuteOptions { simulate, tags, skip_tags, working_dir }`：控制 dry-run、tags 过滤和相对 location 的解析基准。
 
@@ -63,7 +64,9 @@ src-tauri/src/orden/
 - `orden_save_cmd(name, yaml)`
 - `orden_delete_cmd(name)`
 - `orden_check_cmd(yaml)`
-- `orden_run_cmd(yaml, simulate, tags, skip_tags) -> OrdenRunResult`
+- `orden_run_cmd(yaml, simulate, tags, skip_tags) -> OrdenTaskHandle`
+- `orden_run_job_cmd(job) -> OrdenTaskHandle`
+- `orden_task_status_cmd(task_id) -> OrdenTaskStatus`
 
 ### CLI
 
@@ -174,6 +177,7 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] Orden 自动化任务支持 manual/fixed/cron/interval/monitor 的创建、编辑、启停、立即运行与删除
 - [x] 单条 Orden 配置支持行内试跑、配置预览和分组更多菜单；可视化规则按基础信息、来源筛选、执行动作 Card 归组
 - [x] Settings 增加 MCP 开关、stdio/HTTP 快捷配置和客户端配置片段
+- [x] 新增 Orden 模版中心 Tab：系统模版浏览、详情预览、加号快速生成配置；系统/用户模版持久化到本地 `orden/templates/` YAML 文件并支持编辑另存
 - [x] 新增 `shelfy --mcp` / `shelfy --cli mcp` stdio MCP 服务
 - [x] MCP 写工具由独立 `mcp_allow_write` 控制
 - [ ] Visual 模式保留复杂 YAML 的 round-trip 注释/未知字段
@@ -185,10 +189,22 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] Popup / Settings 使用动态分包，Settings 数据改为进入对应 tab 后再加载
 - [x] Orden 配置中心仅预取每份配置最近一次结果，进入详情后再加载完整历史与 YAML
 - [x] Popup 后台轮询从 5 秒全量刷新拆为 15 秒 pending / 60 秒 Orden tasks，并在窗口失焦时停止
+- [x] Orden 手动/任务执行改为独立 worker 线程，Tauri 通过任务句柄轮询结果；scheduler/watcher/CLI/MCP 也不再在调用线程直接执行规则
 - [x] 移除未使用的隐藏 `main` WebView，自启动保持零窗口直到用户打开 UI
 - [x] tray 菜单增加监控状态、主面板、立即整理、Orden 自动化、监控目录和设置；语言/文件夹变化时刷新
 - [x] 除 Tray 小松鼠外，桌面端、移动端、安装包、网页 favicon 与界面品牌标记统一替换为松果圆角矩形图标
 - [x] 全局 UI 主题切换为深松针绿/鼠尾草绿/暖奶油品牌色，浅深模式同步，并将基础圆角收敛到 6px
+
+### 阶段 9：UI 审计修复
+- [x] P0 菜单浮层：Menu Portal、碰撞检测与键盘焦点
+- [x] P0 模版中心筛选：系统模版/我的模版切换时同步详情选择
+- [x] P0 模版中心完善：另存后自动进入我的模版、修复卡片嵌套交互、同步内置模版更新并补测试
+- [ ] P0 Rules / Orden 响应式操作区：700px 与 900px 不裁切
+- [ ] P1 全局颜色与按钮尺寸：拉开 surface 层级，移除偏黄正文和品牌外渐变，建立 28/32px 按钮层级
+- [ ] P1 页面密度：收紧 Rules、General、Template、Orden、History 的 Card、表格、工具栏和空状态
+- [ ] P2 交互可访问性：Tooltip、表单标签、本地化枚举，并用 Dialog/Alert Dialog 替代审计范围内原生 prompt/confirm
+- [ ] 回归验收：浅色/深色、中文/英文、700×500、900×650、1280×800
+- [x] 新增 `docs/UI_AUDIT.md`，完成 6 张截图的问题编号、代码根因、建议与验收标准映射
 
 ## 关键技术决策
 
@@ -204,12 +220,13 @@ Settings → Advanced 是当前图形入口，支持：
 - 暂无编译阻塞。`cargo test` 与前端 `npm run build` 已通过。
 - 品牌图标与主题替换已通过 `npm run build`、`cargo build`；Tray 资产哈希校验保持不变。
 - 剩余设计点：非 move/rename 的 orden 动作如何进入 Shelfy History/Undo 需要单独定义语义，避免 copy/delete/trash/shell 被现有“反向 rename”撤销逻辑误处理。
+- UI 阶段 9 已开工；当前无阻塞，按 P0 → P1 → P2 推进。
 
 ## 下一步
 
-1. 给 Advanced/Orden 配置中心和任务表补齐其它语言文案（当前中英文 key 完整，其它语言走 fallback）
-2. 为 copy/delete/trash/shell 设计 History/Undo 策略，或显式标记为不可撤销事件
-3. 将 watcher/scheduler 的高级模式接入 orden 配置（当前 Settings/CLI/手动运行已接入）
-4. 增加端到端测试：保存配置 → sim → run → History/Undo
-5. 设计专用 Backup UI：在 Advanced/Orden 的 `copy` 能力之上提供文档/文件夹备份模板
-6. 为 MCP 增加客户端兼容性测试（Claude Desktop、LocalAI、其它本地运行时）
+1. 完成阶段 9 的 Rules / Orden 响应式 P0 修复并验证 700px、900px 窗口
+2. 完成主题、按钮和五个设置页面的 P1 密度修复
+3. 完成截图覆盖流程的 Tooltip、Dialog、标签与本地化 P2 修复
+4. 为 copy/delete/trash/shell 设计 History/Undo 策略，或显式标记为不可撤销事件
+5. 将 watcher/scheduler 的高级模式接入 orden 配置（当前 Settings/CLI/手动运行已接入）
+6. 增加端到端测试：保存配置 → sim → run → History/Undo

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Download, FolderOpen, History, MoreHorizontal, Pencil, Plus, Save, Trash2, Upload, X } from "lucide-react";
 import { Rule, WatchedFolder } from "../../store/useAppStore";
@@ -13,6 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from ".
 import { Switch } from "../ui/switch";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "../ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { AlertDialog, AlertDialogClose, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogPopup, AlertDialogTitle } from "../ui/alert-dialog";
 
 type Toast = { message: string; type: "success" | "error" } | null;
 
@@ -36,7 +38,7 @@ interface RulesTabProps {
   handleChooseRuleScopeFolder: () => void;
   handleSaveRule: () => void;
   updateRule: (rule: Rule) => Promise<void>;
-  deleteRule: (id: number) => void;
+  deleteRule: (id: number) => Promise<void>;
   handleViewHistory: (ruleLabel: string) => void;
 }
 
@@ -64,6 +66,23 @@ export function RulesTab({
   handleViewHistory,
 }: RulesTabProps) {
   const { t } = useTranslation();
+  const [pendingDeleteRule, setPendingDeleteRule] = useState<Rule | null>(null);
+  const [deletingRule, setDeletingRule] = useState(false);
+  const [deleteRuleError, setDeleteRuleError] = useState<string | null>(null);
+
+  const confirmDeleteRule = async () => {
+    if (!pendingDeleteRule?.id) return;
+    setDeletingRule(true);
+    setDeleteRuleError(null);
+    try {
+      await deleteRule(pendingDeleteRule.id);
+      setPendingDeleteRule(null);
+    } catch (error) {
+      setDeleteRuleError(String(error || t("settings.rules.deleteError")));
+    } finally {
+      setDeletingRule(false);
+    }
+  };
 
   const newRule = (): Rule => ({
     name: "",
@@ -89,17 +108,40 @@ export function RulesTab({
       ? t("settings.rules.allFileTypes")
       : extensions.map((extension) => `.${extension}`).join(", ");
     const pattern = rule.pattern ? t("settings.rules.withPattern", { pattern: rule.pattern }) : "";
-    if (rule.action === "ignore") {
-      return t("settings.rules.ignoreDescription", { scope: ruleScope(rule), matches, pattern });
-    }
-    return t("settings.rules.functionDescription", {
-      scope: ruleScope(rule),
-      matches,
-      pattern,
-      action: rule.action === "copy" ? t("settings.rules.actionCopy") : t("settings.rules.actionMove"),
-      destination: rule.destination || "—",
-    });
+    const action = rule.action === "copy"
+      ? t("settings.rules.actionCopy")
+      : rule.action === "ignore"
+        ? t("settings.rules.actionIgnore")
+        : t("settings.rules.actionMove");
+    return [matches, pattern, action, rule.action === "ignore" ? null : rule.destination || "—"].filter(Boolean).join(" · ");
   };
+
+  const ruleActions = (rule: Rule) => (
+    <div className="flex justify-end gap-0.5">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button type="button" onClick={() => setEditingRule({ ...rule })} variant="ghost" size="icon-sm" aria-label={t("settings.rules.edit")}>
+            <Pencil size={13} />
+          </Button>
+        </TooltipTrigger>
+        <TooltipContent>{t("settings.rules.edit")}</TooltipContent>
+      </Tooltip>
+      <Menu>
+        <MenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label={t("settings.rules.moreActions")} />}><MoreHorizontal size={15} /></MenuTrigger>
+        <MenuPopup>
+          <MenuGroup>
+            <MenuGroupLabel>{t("settings.rules.ruleManagement")}</MenuGroupLabel>
+            <MenuItem onClick={() => handleViewHistory(rule.name)}><History />{t("settings.rules.viewHistory")}</MenuItem>
+            <MenuItem onClick={() => setEditingRule({ ...rule })}><Pencil />{t("settings.rules.edit")}</MenuItem>
+          </MenuGroup>
+          <MenuSeparator />
+          <MenuItem variant="destructive" onClick={() => setPendingDeleteRule(rule)}>
+            <Trash2 />{t("settings.rules.delete")}
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+    </div>
+  );
 
   const canSaveRule = Boolean(
     editingRule?.name.trim()
@@ -116,6 +158,7 @@ export function RulesTab({
         </div>
         <Button
           type="button"
+          size="sm"
           onClick={() => setEditingRule(newRule())}
         >
           <AnimatedIcon icon={Plus} size={14} motion="bounce" />
@@ -123,7 +166,7 @@ export function RulesTab({
         </Button>
       </div>
 
-      <Card className="order-3 space-y-4 p-4">
+      <Card className="order-3 space-y-3 p-3.5">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold">{t("settings.folders.title")}</h3>
@@ -149,10 +192,10 @@ export function RulesTab({
         </div>
         <div className="space-y-2">
           {folders.map((f) => (
-            <Card key={f.id} className="flex items-center justify-between gap-3 px-4 py-3">
+            <div key={f.id} className="flex items-center justify-between gap-3 rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
               <div className="min-w-0 flex-1">
                 <div className="truncate text-sm font-medium">{f.path}</div>
-                <div className="mt-1.5">
+                <div className="mt-1">
                   <Label className="mb-1 block text-[10px] uppercase text-muted-foreground">
                     {t("settings.folders.mode")}
                   </Label>
@@ -168,20 +211,16 @@ export function RulesTab({
                   </Select>
                 </div>
               </div>
-              <Button
-                onClick={() => f.id && removeFolder(f.id)}
-                variant="ghost"
-                size="icon"
-                className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive"
-              >
-                <Trash2 size={14} />
-              </Button>
-            </Card>
+              <Tooltip>
+                <TooltipTrigger asChild><Button onClick={() => f.id && removeFolder(f.id)} variant="ghost" size="icon-sm" className="shrink-0 text-destructive hover:bg-destructive/10 hover:text-destructive" aria-label={t("settings.folders.remove")}><Trash2 size={14} /></Button></TooltipTrigger>
+                <TooltipContent>{t("settings.folders.remove")}</TooltipContent>
+              </Tooltip>
+            </div>
           ))}
         </div>
       </Card>
 
-      <Card className="order-4 space-y-3 p-4">
+      <Card className="order-4 space-y-3 p-3.5">
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={handleExportRules} variant="outline">
             <AnimatedIcon icon={Download} size={14} motion="float" />
@@ -198,7 +237,7 @@ export function RulesTab({
         </Label>
         {ruleToast && (
           <div
-            className={`rounded-xl border px-3 py-2 text-xs shadow-sm ${
+            className={`rounded-lg border px-3 py-2 text-xs ${
               ruleToast.type === "success"
                 ? "border-primary/25 bg-primary/8 text-primary"
                 : "border-destructive/20 bg-destructive/10 text-destructive"
@@ -216,7 +255,7 @@ export function RulesTab({
             <CardDescription>{t("settings.rules.editorDescription")}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-3 pt-4">
-            <Card className="shadow-none">
+            <section className="rounded-lg border border-border/70">
               <CardHeader>
                 <CardTitle className="text-sm">1. {t("settings.rules.basicSettings")}</CardTitle>
                 <CardDescription className="text-xs">{t("settings.rules.basicSettingsDesc")}</CardDescription>
@@ -235,9 +274,9 @@ export function RulesTab({
                   {t("settings.rules.enabled")}
                 </Label>
               </CardContent>
-            </Card>
+            </section>
 
-            <Card className="shadow-none">
+            <section className="rounded-lg border border-border/70">
               <CardHeader>
                 <CardTitle className="text-sm">2. {t("settings.rules.matchSettings")}</CardTitle>
                 <CardDescription className="text-xs">{t("settings.rules.matchSettingsDesc")}</CardDescription>
@@ -299,9 +338,9 @@ export function RulesTab({
                   <p className="mt-1 text-[11px] text-muted-foreground">{t("settings.rules.patternHint")}</p>
                 </div>
               </CardContent>
-            </Card>
+            </section>
 
-            <Card className="shadow-none">
+            <section className="rounded-lg border border-border/70">
               <CardHeader>
                 <CardTitle className="text-sm">3. {t("settings.rules.actionSettings")}</CardTitle>
                 <CardDescription className="text-xs">{t("settings.rules.actionSettingsDesc")}</CardDescription>
@@ -334,7 +373,7 @@ export function RulesTab({
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </section>
 
             {!canSaveRule && <p className="text-xs text-destructive">{t("settings.rules.requiredFields")}</p>}
             <div className="flex gap-2">
@@ -360,64 +399,37 @@ export function RulesTab({
           <Badge variant="secondary">{t("settings.rules.ruleCount", { count: rules.length })}</Badge>
         </CardHeader>
         <CardContent className="p-0">
-          <Table>
+          <div className="hidden min-[780px]:block"><Table className="table-fixed">
             <TableHeader>
               <TableRow>
-                <TableHead>{t("settings.rules.rule")}</TableHead>
-                <TableHead>{t("settings.rules.folderScope")}</TableHead>
-                <TableHead>{t("settings.rules.action")}</TableHead>
-                <TableHead>{t("settings.rules.priority")}</TableHead>
-                <TableHead>{t("settings.rules.status")}</TableHead>
-                <TableHead className="text-right">{t("settings.rules.actions")}</TableHead>
+                <TableHead className="w-[38%]">{t("settings.rules.rule")}</TableHead>
+                <TableHead className="w-[22%]">{t("settings.rules.folderScope")}</TableHead>
+                <TableHead className="w-[10%]">{t("settings.rules.action")}</TableHead>
+                <TableHead className="w-[8%]">{t("settings.rules.priority")}</TableHead>
+                <TableHead className="w-[12%]">{t("settings.rules.status")}</TableHead>
+                <TableHead className="w-[10%] text-right">{t("settings.rules.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rules.map((rule) => (
                 <TableRow key={rule.id || rule.name}>
-                  <TableCell className="min-w-72">
-                    <div className="font-medium">{rule.name}</div>
-                    <div className="mt-0.5 max-w-xl text-xs leading-5 text-muted-foreground">{ruleDescription(rule)}</div>
+                  <TableCell className="min-w-0">
+                    <div className="truncate font-medium" title={rule.name}>{rule.name}</div>
+                    <div className="mt-0.5 truncate text-xs text-muted-foreground" title={ruleDescription(rule)}>{ruleDescription(rule)}</div>
                   </TableCell>
                   <TableCell className="max-w-48 truncate text-xs text-muted-foreground" title={ruleScope(rule)}>{ruleScope(rule)}</TableCell>
                   <TableCell><Badge variant="outline">{rule.action === "copy" ? t("settings.rules.actionCopy") : rule.action === "ignore" ? t("settings.rules.actionIgnore") : t("settings.rules.actionMove")}</Badge></TableCell>
                   <TableCell className="tabular-nums">{rule.priority}</TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center">
                       <Switch
                         checked={rule.enabled}
                         onCheckedChange={(enabled) => updateRule({ ...rule, enabled })}
                         aria-label={t("settings.rules.toggleRule", { name: rule.name })}
                       />
-                      <span className="text-xs text-muted-foreground">{rule.enabled ? t("settings.rules.enabled") : t("common.off")}</span>
                     </div>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex justify-end gap-1">
-                      <Button type="button" onClick={() => setEditingRule({ ...rule })} variant="outline" size="sm"><Pencil size={13} />{t("settings.rules.edit")}</Button>
-                      <Menu>
-                        <MenuTrigger render={<Button type="button" variant="ghost" size="icon" aria-label={t("settings.rules.moreActions")} />}><MoreHorizontal size={15} /></MenuTrigger>
-                        <MenuPopup>
-                          <MenuGroup>
-                            <MenuGroupLabel>{t("settings.rules.ruleManagement")}</MenuGroupLabel>
-                            <MenuItem onClick={() => handleViewHistory(rule.name)}><History />{t("settings.rules.viewHistory")}</MenuItem>
-                            <MenuItem onClick={() => setEditingRule({ ...rule })}><Pencil />{t("settings.rules.edit")}</MenuItem>
-                          </MenuGroup>
-                          <MenuSeparator />
-                          <MenuItem
-                            variant="destructive"
-                            onClick={() => {
-                              if (rule.id && window.confirm(t("settings.rules.deleteConfirm", { name: rule.name }))) {
-                                deleteRule(rule.id);
-                              }
-                            }}
-                          >
-                            <Trash2 />
-                            {t("settings.rules.delete")}
-                          </MenuItem>
-                        </MenuPopup>
-                      </Menu>
-                    </div>
-                  </TableCell>
+                  <TableCell>{ruleActions(rule)}</TableCell>
                 </TableRow>
               ))}
               {rules.length === 0 && (
@@ -425,9 +437,37 @@ export function RulesTab({
               )}
             </TableBody>
             <TableFooter><TableRow><TableCell colSpan={5}>{t("settings.rules.totalRules")}</TableCell><TableCell className="text-right">{rules.length}</TableCell></TableRow></TableFooter>
-          </Table>
+          </Table></div>
+          <div className="divide-y divide-border min-[780px]:hidden">
+            {rules.map((rule) => (
+              <div key={rule.id || rule.name} className="space-y-2 px-3 py-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0"><div className="truncate text-sm font-medium">{rule.name}</div><div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{ruleDescription(rule)}</div></div>
+                  {ruleActions(rule)}
+                </div>
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                  <span className="max-w-[16rem] truncate" title={ruleScope(rule)}>{ruleScope(rule)}</span>
+                  <Badge variant="outline">{rule.action === "copy" ? t("settings.rules.actionCopy") : rule.action === "ignore" ? t("settings.rules.actionIgnore") : t("settings.rules.actionMove")}</Badge>
+                  <span>{t("settings.rules.priority")}: {rule.priority}</span>
+                  <Switch checked={rule.enabled} onCheckedChange={(enabled) => updateRule({ ...rule, enabled })} aria-label={t("settings.rules.toggleRule", { name: rule.name })} />
+                </div>
+              </div>
+            ))}
+            {rules.length === 0 && <div className="px-3 py-8 text-center text-sm text-muted-foreground">{t("settings.rules.noRules")}</div>}
+          </div>
         </CardContent>
       </Card>
+
+      <AlertDialog open={Boolean(pendingDeleteRule)} onOpenChange={(open) => { if (!open && !deletingRule) { setPendingDeleteRule(null); setDeleteRuleError(null); } }}>
+        <AlertDialogPopup>
+          <AlertDialogHeader><AlertDialogTitle>{t("settings.rules.delete")}</AlertDialogTitle><AlertDialogDescription>{pendingDeleteRule ? t("settings.rules.deleteConfirm", { name: pendingDeleteRule.name }) : ""}</AlertDialogDescription></AlertDialogHeader>
+          {deleteRuleError && <div className="px-4 text-xs text-destructive">{deleteRuleError}</div>}
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button type="button" variant="outline" size="sm" disabled={deletingRule} />}>{t("common.cancel")}</AlertDialogClose>
+            <Button type="button" variant="destructive" size="sm" onClick={() => void confirmDeleteRule()} disabled={deletingRule}>{deletingRule ? t("settings.rules.deleting") : t("settings.rules.delete")}</Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
     </div>
   );
 }

@@ -1,83 +1,142 @@
-import * as React from "react";
-import { Check, ChevronRight } from "lucide-react";
+import { Menu as MenuPrimitive } from "@base-ui/react/menu";
+import { ChevronRight } from "lucide-react";
+import type * as React from "react";
 import { cn } from "../../lib/utils";
 
-type MenuContextValue = { open: boolean; setOpen: (open: boolean) => void };
-const MenuContext = React.createContext<MenuContextValue | null>(null);
+const Menu = MenuPrimitive.Root;
+const MenuPortal = MenuPrimitive.Portal;
 
-function Menu({ children }: { children: React.ReactNode }) {
-  const [open, setOpen] = React.useState(false);
-  const ref = React.useRef<HTMLDivElement>(null);
-  React.useEffect(() => {
-    const close = (event: MouseEvent) => {
-      if (!ref.current?.contains(event.target as Node)) setOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, []);
-  return <MenuContext.Provider value={{ open, setOpen }}><div ref={ref} className="relative inline-flex">{children}</div></MenuContext.Provider>;
+function MenuTrigger(props: MenuPrimitive.Trigger.Props) {
+  return <MenuPrimitive.Trigger data-slot="menu-trigger" {...props} />;
 }
 
-function MenuTrigger({ render, children }: { render?: React.ReactElement<{ onClick?: React.MouseEventHandler }>; children?: React.ReactNode }) {
-  const context = React.useContext(MenuContext);
-  if (!context) throw new Error("MenuTrigger must be used inside Menu");
-  const onClick: React.MouseEventHandler = (event) => {
-    event.stopPropagation();
-    context.setOpen(!context.open);
-  };
-  if (render) return React.cloneElement(render, { onClick }, children);
-  return <button type="button" onClick={onClick}>{children}</button>;
-}
+function MenuPopup({
+  children,
+  className,
+  sideOffset = 5,
+  align = "end",
+  alignOffset,
+  side = "bottom",
+  collisionBoundary,
+  collisionPadding = 8,
+  collisionAvoidance = { side: "flip", align: "shift", fallbackAxisSide: "none" },
+  positionMethod = "fixed",
+  portalProps,
+  ...props
+}: MenuPrimitive.Popup.Props & {
+  align?: MenuPrimitive.Positioner.Props["align"];
+  sideOffset?: MenuPrimitive.Positioner.Props["sideOffset"];
+  alignOffset?: MenuPrimitive.Positioner.Props["alignOffset"];
+  side?: MenuPrimitive.Positioner.Props["side"];
+  collisionBoundary?: MenuPrimitive.Positioner.Props["collisionBoundary"];
+  collisionPadding?: MenuPrimitive.Positioner.Props["collisionPadding"];
+  collisionAvoidance?: MenuPrimitive.Positioner.Props["collisionAvoidance"];
+  positionMethod?: MenuPrimitive.Positioner.Props["positionMethod"];
+  portalProps?: MenuPrimitive.Portal.Props;
+}) {
+  const defaultBoundary = typeof document === "undefined" ? undefined : document.documentElement;
 
-function MenuPopup({ className, children }: React.HTMLAttributes<HTMLDivElement>) {
-  const context = React.useContext(MenuContext);
-  if (!context?.open) return null;
   return (
-    <div className={cn("absolute right-0 top-full z-50 mt-1 min-w-52 rounded-lg border border-border bg-popover p-1 text-popover-foreground shadow-lg", className)}>
-      {children}
-    </div>
+    <MenuPortal {...portalProps}>
+      <MenuPrimitive.Positioner
+        align={align}
+        alignOffset={alignOffset}
+        collisionAvoidance={collisionAvoidance}
+        collisionBoundary={collisionBoundary ?? defaultBoundary}
+        collisionPadding={collisionPadding}
+        className="z-50"
+        positionMethod={positionMethod}
+        side={side}
+        sideOffset={sideOffset}
+      >
+        <MenuPrimitive.Popup
+          className={cn(
+            "relative flex min-w-44 origin-[var(--transform-origin)] rounded-lg border border-border bg-popover text-popover-foreground shadow-xl outline-none transition-[transform,opacity] data-[ending-style]:scale-95 data-[ending-style]:opacity-0 data-[starting-style]:scale-95 data-[starting-style]:opacity-0",
+            className,
+          )}
+          data-slot="menu-popup"
+          {...props}
+        >
+          <div className="max-h-[var(--available-height)] w-full overflow-y-auto p-1">{children}</div>
+        </MenuPrimitive.Popup>
+      </MenuPrimitive.Positioner>
+    </MenuPortal>
   );
 }
 
-function MenuGroup({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={className} {...props} />;
-}
-function MenuGroupLabel({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("px-2 py-1.5 text-xs font-medium text-muted-foreground", className)} {...props} />;
+function MenuGroup(props: MenuPrimitive.Group.Props) {
+  return <MenuPrimitive.Group data-slot="menu-group" {...props} />;
 }
 
-interface MenuItemProps extends React.ButtonHTMLAttributes<HTMLButtonElement> { variant?: "default" | "destructive" }
-function MenuItem({ className, variant = "default", onClick, ...props }: MenuItemProps) {
-  const context = React.useContext(MenuContext);
+function MenuGroupLabel({ className, ...props }: MenuPrimitive.GroupLabel.Props) {
   return (
-    <button
-      type="button"
-      className={cn("flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm outline-none hover:bg-accent disabled:pointer-events-none disabled:opacity-50 [&>svg]:size-4", variant === "destructive" && "text-destructive hover:bg-destructive/10", className)}
-      onClick={(event) => { onClick?.(event); if (!event.defaultPrevented) context?.setOpen(false); }}
+    <MenuPrimitive.GroupLabel
+      className={cn("px-2 py-1.5 text-[11px] font-medium text-muted-foreground", className)}
+      data-slot="menu-group-label"
       {...props}
     />
   );
 }
-function MenuSeparator({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("-mx-1 my-1 h-px bg-border", className)} {...props} />;
-}
-function MenuShortcut({ className, ...props }: React.HTMLAttributes<HTMLSpanElement>) {
-  return <span className={cn("ml-auto text-xs tracking-widest text-muted-foreground", className)} {...props} />;
+
+function MenuItem({
+  className,
+  variant = "default",
+  ...props
+}: MenuPrimitive.Item.Props & { variant?: "default" | "destructive" }) {
+  return (
+    <MenuPrimitive.Item
+      className={cn(
+        "flex min-h-7 cursor-default select-none items-center gap-2 rounded-md px-2 py-1 text-sm outline-none data-[disabled]:pointer-events-none data-[disabled]:opacity-50 data-[highlighted]:bg-accent data-[highlighted]:text-accent-foreground [&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:opacity-80",
+        variant === "destructive" && "text-destructive data-[highlighted]:bg-destructive/12 data-[highlighted]:text-destructive",
+        className,
+      )}
+      data-slot="menu-item"
+      {...props}
+    />
+  );
 }
 
-interface CheckItemProps extends Omit<MenuItemProps, "onChange" | "variant"> { checked?: boolean; variant?: "default" | "destructive" | "switch"; onCheckedChange?: (checked: boolean) => void }
-function MenuCheckboxItem({ checked = false, onCheckedChange, variant: _variant, children, ...props }: CheckItemProps) {
-  return <MenuItem {...props} onClick={(event) => { event.preventDefault(); onCheckedChange?.(!checked); }}><span className="flex size-4 items-center justify-center">{checked && <Check size={13} />}</span>{children}</MenuItem>;
-}
-function MenuRadioGroup({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) { return <div className={className} {...props} />; }
-function MenuRadioItem({ value: _value, children, ...props }: MenuItemProps & { value: string }) { return <MenuItem {...props}>{children}</MenuItem>; }
-
-function MenuSub({ children }: { children: React.ReactNode }) { return <div className="group/sub relative">{children}</div>; }
-function MenuSubTrigger({ children, className, ...props }: MenuItemProps) {
-  return <MenuItem className={className} {...props} onClick={(event) => event.preventDefault()}>{children}<ChevronRight className="ml-auto" /></MenuItem>;
-}
-function MenuSubPopup({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn("invisible absolute left-full top-0 z-50 ml-1 min-w-48 rounded-lg border border-border bg-popover p-1 opacity-0 shadow-lg group-hover/sub:visible group-hover/sub:opacity-100", className)} {...props} />;
+function MenuSeparator({ className, ...props }: MenuPrimitive.Separator.Props) {
+  return <MenuPrimitive.Separator className={cn("mx-2 my-1 h-px bg-border", className)} {...props} />;
 }
 
-export { Menu, MenuTrigger, MenuPopup, MenuGroup, MenuGroupLabel, MenuItem, MenuSeparator, MenuShortcut, MenuCheckboxItem, MenuRadioGroup, MenuRadioItem, MenuSub, MenuSubTrigger, MenuSubPopup };
+function MenuShortcut({ className, ...props }: React.ComponentProps<"kbd">) {
+  return <kbd className={cn("ml-auto text-xs tracking-widest text-muted-foreground", className)} {...props} />;
+}
+
+const MenuCheckboxItem = MenuPrimitive.CheckboxItem;
+const MenuRadioGroup = MenuPrimitive.RadioGroup;
+const MenuRadioItem = MenuPrimitive.RadioItem;
+const MenuSub = MenuPrimitive.SubmenuRoot;
+
+function MenuSubTrigger({ className, children, ...props }: MenuPrimitive.SubmenuTrigger.Props) {
+  return (
+    <MenuPrimitive.SubmenuTrigger
+      className={cn("flex min-h-7 items-center gap-2 rounded-md px-2 py-1 text-sm outline-none data-[highlighted]:bg-accent data-[popup-open]:bg-accent", className)}
+      {...props}
+    >
+      {children}<ChevronRight className="ml-auto size-4 opacity-70" />
+    </MenuPrimitive.SubmenuTrigger>
+  );
+}
+
+function MenuSubPopup(props: React.ComponentProps<typeof MenuPopup>) {
+  return <MenuPopup align="start" side="inline-end" sideOffset={2} {...props} />;
+}
+
+export {
+  Menu,
+  MenuTrigger,
+  MenuPopup,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuSeparator,
+  MenuShortcut,
+  MenuCheckboxItem,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuSub,
+  MenuSubTrigger,
+  MenuSubPopup,
+};

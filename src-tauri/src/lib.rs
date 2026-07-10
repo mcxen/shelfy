@@ -6,6 +6,7 @@ pub mod ignore;
 pub mod mcp;
 pub mod orden;
 pub mod orden_jobs;
+pub mod orden_runtime;
 pub mod rules;
 pub mod scheduler;
 pub mod tray;
@@ -190,9 +191,14 @@ pub fn run() {
             orden_load_cmd,
             orden_save_cmd,
             orden_delete_cmd,
+            orden_template_list_cmd,
+            orden_template_load_cmd,
+            orden_template_save_cmd,
+            orden_template_delete_cmd,
             orden_check_cmd,
             orden_visual_from_yaml_cmd,
             orden_run_cmd,
+            orden_task_status_cmd,
             orden_history_cmd,
             orden_delete_history_cmd,
             orden_clear_history_cmd,

@@ -206,29 +206,30 @@ fn perform_scheduled_clean(app_handle: &AppHandle, trigger: &str) -> Result<(), 
         }
     }
 
-    let (orden_success, orden_errors, orden_configs) =
+    let (_orden_dispatch_success, orden_dispatch_errors, orden_configs) =
         crate::orden_jobs::run_due_jobs("scheduled-clean", Local::now(), None)?;
 
     println!("[scheduler] organized {} files", total);
     let _ = log_scheduler_event(
-        if errors > 0 || orden_errors > 0 {
+        if errors > 0 || orden_dispatch_errors > 0 {
             "warn"
         } else {
             "info"
         },
         "clean_finished",
         &format!(
-            "Scheduled clean organized {} files; Orden matched {} items across {} configs",
-            total, orden_success, orden_configs
+            "Scheduled clean organized {} files; dispatched {} Orden jobs asynchronously",
+            total, orden_configs
         ),
         Some(
             json!({
                 "trigger": trigger,
                 "organized": total,
                 "errors": errors,
-                "orden_success": orden_success,
-                "orden_errors": orden_errors,
+                "orden_success": 0,
+                "orden_errors": orden_dispatch_errors,
                 "orden_configs": orden_configs,
+                "orden_async": true,
             })
             .to_string(),
         ),
@@ -238,10 +239,11 @@ fn perform_scheduled_clean(app_handle: &AppHandle, trigger: &str) -> Result<(), 
         "scheduled-clean-done",
         json!({
             "organized": total,
-            "errors": errors + orden_errors,
+            "errors": errors + orden_dispatch_errors,
             "trigger": trigger,
-            "orden_success": orden_success,
+            "orden_success": 0,
             "orden_configs": orden_configs,
+            "orden_async": true,
         }),
     );
 

@@ -5,6 +5,7 @@ import {
   McpClientConfig,
   OrdenVisualConfig,
   OrdenVisualRule,
+  OrdenTemplate,
   OrdenRunResult,
   OrdenJob,
   useAppStore,
@@ -21,6 +22,7 @@ import { RulesTab } from "./settings/RulesTab";
 import { OrdenPreview } from "./settings/OrdenPreview";
 import { OrdenRunHistoryTable } from "./settings/OrdenRunHistoryTable";
 import { OrdenVisualRuleCard } from "./settings/OrdenVisualRuleCard";
+import { OrdenTemplateCenter } from "./settings/OrdenTemplateCenter";
 import { TopNavButton } from "./settings/TopNavButton";
 import {
   defaultMcpDraft,
@@ -80,11 +82,12 @@ import {
   Search,
   StickyNote,
   ShieldAlert,
+  LayoutGrid,
 } from "lucide-react";
 
 
-type Tab = "rules" | "history" | "ignore" | "advanced" | "general";
-const SETTINGS_TABS: Tab[] = ["rules", "history", "ignore", "advanced", "general"];
+type Tab = "rules" | "history" | "ignore" | "advanced" | "templates" | "general";
+const SETTINGS_TABS: Tab[] = ["rules", "history", "ignore", "advanced", "templates", "general"];
 
 function initialSettingsTab(): Tab {
   const query = window.location.hash.split("?", 2)[1] || "";
@@ -134,6 +137,9 @@ export default function Settings() {
     ordenLoad,
     ordenSave,
     ordenDelete,
+    ordenTemplateList,
+    ordenTemplateSave,
+    ordenTemplateDelete,
     ordenCheck,
     ordenRun,
     ordenVisualFromYaml,
@@ -169,6 +175,7 @@ export default function Settings() {
   const [mcpClientConfig, setMcpClientConfig] = useState<McpClientConfig | null>(null);
   const [mcpToast, setMcpToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const [ordenConfigs, setOrdenConfigs] = useState<string[]>([]);
+  const [ordenTemplates, setOrdenTemplates] = useState<OrdenTemplate[]>([]);
   const [ordenName, setOrdenName] = useState("main");
   const [ordenYaml, setOrdenYaml] = useState(DEFAULT_ORDEN_EXAMPLE);
   const [ordenEditorMode, setOrdenEditorMode] = useState<OrdenEditorMode>("source");
@@ -243,6 +250,10 @@ export default function Settings() {
       } else if (tab === "advanced") {
         const [, jobs] = await Promise.all([loadOrdenConfigs(), ordenJobs()]);
         setOrdenJobsRows(jobs);
+      } else if (tab === "templates") {
+        const [names, templates] = await Promise.all([ordenList(), ordenTemplateList()]);
+        setOrdenConfigs(names);
+        setOrdenTemplates(templates);
       } else if (tab === "general") {
         const [, , keepalive] = await Promise.all([
           getSchedule(),
@@ -823,6 +834,40 @@ export default function Settings() {
     }
   };
 
+  const handleUseOrdenTemplate = async (template: OrdenTemplate) => {
+    const sourceName = template.id.replace(/^custom-/, "template-").replace(/[^a-zA-Z0-9_-]/g, "-");
+    const baseName = sourceName || `template-${Date.now()}`;
+    let configName = baseName;
+    let suffix = 2;
+    while (ordenConfigs.includes(configName)) {
+      configName = `${baseName}-${suffix}`;
+      suffix += 1;
+    }
+    await ordenCheck(template.yaml);
+    await ordenSave(configName, template.yaml);
+    const visual = await ordenVisualFromYaml(template.yaml);
+    setOrdenName(configName);
+    setOrdenYaml(template.yaml);
+    setOrdenVisual(visual.rules.length > 0 ? visual : defaultOrdenVisualConfig());
+    setOrdenEditorMode("visual");
+    setOrdenView("list");
+    await loadOrdenConfigs(configName);
+    setTab("advanced");
+    setOrdenToast({ message: t("settings.orden.templates.addedNotice"), type: "success" });
+    setTimeout(() => setOrdenToast(null), 3000);
+  };
+
+  const handleSaveOrdenTemplate = async (name: string, yaml: string) => {
+    await ordenCheck(yaml);
+    await ordenTemplateSave(name, yaml);
+    setOrdenTemplates(await ordenTemplateList());
+  };
+
+  const handleDeleteOrdenTemplate = async (template: OrdenTemplate) => {
+    await ordenTemplateDelete(template.name);
+    setOrdenTemplates(await ordenTemplateList());
+  };
+
   const handleOrdenDelete = async () => {
     if (!ordenConfigs.includes(ordenName)) {
       setOrdenName("main");
@@ -1072,6 +1117,12 @@ export default function Settings() {
             onClick={() => setTab("advanced")}
             icon={<Code2 size={16} />}
             label={t("settings.orden.title")}
+          />
+          <TopNavButton
+            active={tab === "templates"}
+            onClick={() => setTab("templates")}
+            icon={<LayoutGrid size={16} />}
+            label={t("settings.orden.templates.tab")}
           />
           <TopNavButton
             active={tab === "history"}
@@ -1507,12 +1558,12 @@ export default function Settings() {
                             <TableCell><Badge variant="outline" className="gap-1.5"><span aria-hidden="true" className={`size-1.5 rounded-full ${scheduled ? "bg-primary" : "bg-muted-foreground/64"}`} />{scheduled ? t("settings.orden.running") : t("settings.orden.stopped")}</Badge></TableCell>
                             <TableCell className="text-xs text-muted-foreground">{last ? new Date(last.timestamp).toLocaleString() : "—"}</TableCell>
                             <TableCell className="text-right">
-                              <div className="flex justify-end gap-1">
-                                <Button type="button" onClick={() => runOrdenConfigByName(name, true)} variant="outline" size="sm" disabled={ordenBusy}>
+                              <div className="flex flex-wrap justify-end gap-1">
+                                <Button type="button" onClick={() => runOrdenConfigByName(name, true)} variant="outline" size="sm" className="max-[900px]:px-2" disabled={ordenBusy}>
                                   <ScanSearch size={13} />
                                   {t("settings.orden.tryRun")}
                                 </Button>
-                                <Button type="button" onClick={() => handleOrdenPreview(name)} variant="ghost" size="sm">
+                                <Button type="button" onClick={() => handleOrdenPreview(name)} variant="ghost" size="sm" className="max-[900px]:px-2">
                                   <Eye size={13} />
                                   {t("settings.orden.preview")}
                                 </Button>
@@ -1759,6 +1810,17 @@ export default function Settings() {
               </>
             )}
           </div>
+        )}
+
+        {tab === "templates" && (
+          <OrdenTemplateCenter
+            templates={ordenTemplates}
+            configNames={ordenConfigs}
+            onUseTemplate={handleUseOrdenTemplate}
+            onLoadConfig={ordenLoad}
+            onSaveTemplate={handleSaveOrdenTemplate}
+            onDeleteTemplate={handleDeleteOrdenTemplate}
+          />
         )}
 
         {tab === "general" && (

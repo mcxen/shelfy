@@ -2,15 +2,42 @@ use crate::db::{
     get_orden_config, list_orden_jobs, log_scheduler_event, mark_orden_job_run, OrdenJob,
 };
 use chrono::{DateTime, Duration, Local, NaiveTime, Utc};
+use once_cell::sync::Lazy;
 use serde_json::json;
+use std::collections::HashSet;
+use std::sync::Mutex;
+
+static RUNNING_JOBS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
+
+fn job_key(job: &OrdenJob) -> String {
+    job.id
+        .map(|id| format!("id:{id}"))
+        .unwrap_or_else(|| format!("name:{}", job.name))
+}
+
+fn try_mark_running(job: &OrdenJob) -> bool {
+    let key = job_key(job);
+    let mut running = RUNNING_JOBS.lock().unwrap();
+    if running.contains(&key) {
+        return false;
+    }
+    running.insert(key);
+    true
+}
+
+fn mark_finished(job: &OrdenJob) {
+    RUNNING_JOBS.lock().unwrap().remove(&job_key(job));
+}
 
 pub fn run_due_jobs(
     trigger: &str,
     now: DateTime<Local>,
     event_path: Option<&std::path::Path>,
 ) -> Result<(usize, usize, usize), String> {
+    // The tuple reports dispatch-time information only. Worker results are
+    // persisted to orden_run_logs when each background job finishes.
     let jobs = list_orden_jobs().map_err(|e| e.to_string())?;
-    let mut total_success = 0usize;
+    let total_success = 0usize;
     let mut total_errors = 0usize;
     let mut ran_jobs = 0usize;
 
@@ -18,22 +45,55 @@ pub fn run_due_jobs(
         if !job.enabled || !job_due(&job, now, event_path) {
             continue;
         }
-        match run_job_summary(&job, trigger) {
-            Ok((success, errors)) => {
-                ran_jobs += 1;
-                total_success += success;
-                total_errors += errors;
-                if let Some(id) = job.id {
-                    let _ = mark_orden_job_run(id);
+        if !try_mark_running(&job) {
+            continue;
+        }
+        let worker_job = job.clone();
+        let worker_trigger = trigger.to_string();
+        match std::thread::Builder::new()
+            .name(format!("orden-job-{}", worker_job.name))
+            .spawn(move || {
+                let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_job_summary(&worker_job, &worker_trigger)
+                }));
+                if let Ok(Ok(_)) = &result {
+                    if let Some(id) = worker_job.id {
+                        let _ = mark_orden_job_run(id);
+                    }
+                } else {
+                    let error = match result {
+                        Ok(Err(error)) => error,
+                        Err(_) => "Orden job worker thread panicked".to_string(),
+                        Ok(Ok(_)) => unreachable!(),
+                    };
+                    let _ = log_scheduler_event(
+                        "error",
+                        "orden_job_failed",
+                        &format!("Orden job '{}' failed", worker_job.name),
+                        Some(
+                            json!({
+                                "trigger": worker_trigger,
+                                "job": worker_job.name,
+                                "error": error,
+                            })
+                            .to_string(),
+                        ),
+                    );
                 }
-            }
-            Err(e) => {
+                mark_finished(&worker_job);
+            }) {
+            Ok(_) => ran_jobs += 1,
+            Err(error) => {
+                mark_finished(&job);
                 total_errors += 1;
                 let _ = log_scheduler_event(
                     "error",
-                    "orden_job_failed",
-                    &format!("Orden job '{}' failed", job.name),
-                    Some(json!({ "trigger": trigger, "job": job.name, "error": e }).to_string()),
+                    "orden_job_dispatch_failed",
+                    &format!("Orden job '{}' could not be dispatched", job.name),
+                    Some(
+                        json!({ "trigger": trigger, "job": job.name, "error": error.to_string() })
+                            .to_string(),
+                    ),
                 );
             }
         }

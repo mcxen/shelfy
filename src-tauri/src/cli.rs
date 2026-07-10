@@ -192,7 +192,12 @@ fn run_orden(args: &[String]) -> Result<(), String> {
         skip_tags,
         working_dir: std::env::current_dir().unwrap_or_default(),
     };
-    let summary = cfg.execute(&opts, &crate::orden::action::DefaultOutput);
+    let summary = std::thread::Builder::new()
+        .name("orden-cli".to_string())
+        .spawn(move || cfg.execute(&opts, &crate::orden::action::DefaultOutput))
+        .map_err(|error| format!("Failed to start Orden worker: {error}"))?
+        .join()
+        .map_err(|_| "Orden worker thread panicked".to_string())?;
     println!(
         "{{\"success\":{},\"errors\":{},\"simulate\":{}}}",
         summary.success, summary.errors, simulate

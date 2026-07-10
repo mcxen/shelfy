@@ -7,8 +7,140 @@ fn data_dir() -> Result<std::path::PathBuf, String> {
         .ok_or_else(|| "Unable to resolve data directory".to_string())
 }
 
+fn orden_templates_dir(data_dir: &std::path::Path) -> std::path::PathBuf {
+    data_dir.join("orden").join("templates")
+}
+
+fn valid_template_name(name: &str) -> Result<String, String> {
+    // Strip a trailing .yaml/.yml extension (case-insensitive) so that
+    // custom template ids returned to the frontend match the client-side
+    // normalization (which also strips .ya?ml$/i). Otherwise something like
+    // "foo.YAML" would be saved as "foo.YAML.yaml" and surface the mismatch.
+    let trimmed = name.trim();
+    let lower = trimmed.to_lowercase();
+    let clean = if lower.ends_with(".yaml") {
+        &trimmed[..trimmed.len() - ".yaml".len()]
+    } else if lower.ends_with(".yml") {
+        &trimmed[..trimmed.len() - ".yml".len()]
+    } else {
+        trimmed
+    }
+    .to_string();
+    if clean.is_empty()
+        || clean == "."
+        || clean == ".."
+        || clean.contains('/')
+        || clean.contains('\\')
+        || clean.chars().any(|ch| ch.is_control())
+    {
+        return Err("Template name must be a safe file name".to_string());
+    }
+    Ok(clean)
+}
+
+struct SystemOrdenTemplate {
+    id: &'static str,
+    title_key: &'static str,
+    description_key: &'static str,
+    category_key: &'static str,
+    icon: &'static str,
+    tone: &'static str,
+    yaml: &'static str,
+}
+
+const SYSTEM_ORDEN_TEMPLATES: &[SystemOrdenTemplate] = &[
+    SystemOrdenTemplate {
+        id: "sort-images",
+        title_key: "settings.orden.templates.system.images.title",
+        description_key: "settings.orden.templates.system.images.description",
+        category_key: "settings.orden.templates.categories.organize",
+        icon: "image",
+        tone: "organize",
+        yaml: "rules:\n  - name: \"整理图片\"\n    locations:\n      - ~/Downloads\n    subfolders: true\n    filters:\n      - extension: [jpg, jpeg, png, gif, webp]\n    actions:\n      - move: ~/Pictures/Inbox/\n",
+    },
+    SystemOrdenTemplate {
+        id: "sort-documents",
+        title_key: "settings.orden.templates.system.documents.title",
+        description_key: "settings.orden.templates.system.documents.description",
+        category_key: "settings.orden.templates.categories.organize",
+        icon: "file",
+        tone: "organize",
+        yaml: "rules:\n  - name: \"整理文档\"\n    locations:\n      - ~/Downloads\n    subfolders: true\n    filters:\n      - extension: [pdf, doc, docx, xls, xlsx, ppt, pptx]\n    actions:\n      - move: ~/Documents/Inbox/\n",
+    },
+    SystemOrdenTemplate {
+        id: "sort-archives",
+        title_key: "settings.orden.templates.system.archives.title",
+        description_key: "settings.orden.templates.system.archives.description",
+        category_key: "settings.orden.templates.categories.organize",
+        icon: "archive",
+        tone: "organize",
+        yaml: "rules:\n  - name: \"整理压缩包\"\n    locations:\n      - ~/Downloads\n    filters:\n      - extension: [zip, 7z, rar, tar, gz]\n    actions:\n      - move: ~/Downloads/Archives/\n",
+    },
+    SystemOrdenTemplate {
+        id: "extract-downloads",
+        title_key: "settings.orden.templates.system.extract.title",
+        description_key: "settings.orden.templates.system.extract.description",
+        category_key: "settings.orden.templates.categories.automation",
+        icon: "folder-archive",
+        tone: "automation",
+        yaml: "rules:\n  - name: \"自动解压下载的压缩包\"\n    locations:\n      - ~/Downloads\n    filters:\n      - extension: [zip, tar, gz]\n    actions:\n      - extract:\n          dest: ~/Downloads/Unpacked/\n          delete_original: false\n",
+    },
+    SystemOrdenTemplate {
+        id: "backup-pdfs",
+        title_key: "settings.orden.templates.system.backup.title",
+        description_key: "settings.orden.templates.system.backup.description",
+        category_key: "settings.orden.templates.categories.backup",
+        icon: "layers",
+        tone: "backup",
+        yaml: "rules:\n  - name: \"备份重要 PDF\"\n    locations:\n      - ~/Documents\n    filters:\n      - extension: pdf\n    actions:\n      - copy:\n          dest: ~/Documents/Shelfy Backups/PDF/\n          continue_with: original\n",
+    },
+    SystemOrdenTemplate {
+        id: "empty-downloads",
+        title_key: "settings.orden.templates.system.cleanup.title",
+        description_key: "settings.orden.templates.system.cleanup.description",
+        category_key: "settings.orden.templates.categories.maintenance",
+        icon: "sparkles",
+        tone: "maintenance",
+        yaml: "rules:\n  - name: \"清理临时文件\"\n    locations:\n      - ~/Downloads\n    filters:\n      - extension: [tmp, log, part]\n    actions:\n      - trash\n",
+    },
+];
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct OrdenTemplateInfo {
+    id: String,
+    name: String,
+    yaml: String,
+    is_system: bool,
+    title_key: Option<String>,
+    description_key: Option<String>,
+    category_key: Option<String>,
+    icon: String,
+    tone: String,
+}
+
+fn ensure_orden_templates(data_dir: &std::path::Path) -> Result<(), String> {
+    let dir = orden_templates_dir(data_dir);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    for template in SYSTEM_ORDEN_TEMPLATES {
+        let path = dir.join(format!("{}.yaml", template.id));
+        let is_current = std::fs::read_to_string(&path)
+            .map(|yaml| yaml == template.yaml)
+            .unwrap_or(false);
+        if !is_current {
+            std::fs::write(&path, template.yaml).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+fn find_system_template(name: &str) -> Option<&'static SystemOrdenTemplate> {
+    SYSTEM_ORDEN_TEMPLATES
+        .iter()
+        .find(|template| template.id == name)
+}
+
 /// A captured log entry from an orden run (mirrors `orden::action::LogEntry`).
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone)]
 pub struct OrdenLog {
     level: String,
     sender: String,
@@ -17,7 +149,7 @@ pub struct OrdenLog {
     msg: String,
 }
 
-#[derive(serde::Serialize)]
+#[derive(serde::Serialize, Clone)]
 pub struct OrdenRunResult {
     success: u64,
     errors: u64,
@@ -131,6 +263,100 @@ pub fn orden_delete_cmd(name: String) -> Result<(), String> {
     delete_orden_config(&name).map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+pub fn orden_template_list_cmd() -> Result<Vec<OrdenTemplateInfo>, String> {
+    let root = data_dir()?;
+    ensure_orden_templates(&root)?;
+    let dir = orden_templates_dir(&root);
+    let mut templates = Vec::new();
+    let entries = std::fs::read_dir(&dir).map_err(|e| e.to_string())?;
+    for entry in entries {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let path = entry.path();
+        if path.extension().and_then(|ext| ext.to_str()) != Some("yaml") {
+            continue;
+        }
+        let name = path
+            .file_stem()
+            .and_then(|stem| stem.to_str())
+            .ok_or_else(|| "Invalid template file name".to_string())?
+            .to_string();
+        let yaml = std::fs::read_to_string(&path).map_err(|e| e.to_string())?;
+        if let Some(system) = find_system_template(&name) {
+            templates.push(OrdenTemplateInfo {
+                id: system.id.to_string(),
+                name: system.id.to_string(),
+                yaml,
+                is_system: true,
+                title_key: Some(system.title_key.to_string()),
+                description_key: Some(system.description_key.to_string()),
+                category_key: Some(system.category_key.to_string()),
+                icon: system.icon.to_string(),
+                tone: system.tone.to_string(),
+            });
+        } else {
+            templates.push(OrdenTemplateInfo {
+                id: format!("custom-{}", name),
+                name,
+                yaml,
+                is_system: false,
+                title_key: None,
+                description_key: None,
+                category_key: None,
+                icon: "sparkles".to_string(),
+                tone: "custom".to_string(),
+            });
+        }
+    }
+    templates.sort_by(|a, b| {
+        a.is_system
+            .cmp(&b.is_system)
+            .reverse()
+            .then_with(|| a.name.cmp(&b.name))
+    });
+    Ok(templates)
+}
+
+#[tauri::command]
+pub fn orden_template_load_cmd(name: String) -> Result<String, String> {
+    let root = data_dir()?;
+    ensure_orden_templates(&root)?;
+    let clean = valid_template_name(&name)?;
+    std::fs::read_to_string(orden_templates_dir(&root).join(format!("{}.yaml", clean)))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn orden_template_save_cmd(name: String, yaml: String) -> Result<(), String> {
+    let root = data_dir()?;
+    ensure_orden_templates(&root)?;
+    let clean = valid_template_name(&name)?;
+    if find_system_template(&clean).is_some() {
+        return Err("System templates cannot be overwritten".to_string());
+    }
+    crate::orden::Config::from_string(&yaml)?;
+    std::fs::write(
+        orden_templates_dir(&root).join(format!("{}.yaml", clean)),
+        yaml,
+    )
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn orden_template_delete_cmd(name: String) -> Result<(), String> {
+    let root = data_dir()?;
+    ensure_orden_templates(&root)?;
+    let clean = valid_template_name(&name)?;
+    if find_system_template(&clean).is_some() {
+        return Err("System templates cannot be deleted".to_string());
+    }
+    let path = orden_templates_dir(&root).join(format!("{}.yaml", clean));
+    if path.exists() {
+        std::fs::remove_file(path).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 /// Validate a config's YAML text without executing it.
 #[tauri::command]
 pub fn orden_check_cmd(yaml: String) -> Result<(), String> {
@@ -157,54 +383,67 @@ pub fn orden_visual_from_yaml_cmd(yaml: String) -> Result<OrdenVisualConfig, Str
     })
 }
 
-/// Simulate or run an orden config from YAML text.
-/// `simulate`: true = dry run, false = apply actions.
+fn map_run_result(result: crate::orden::RunResult) -> OrdenRunResult {
+    OrdenRunResult {
+        success: result.success,
+        errors: result.errors,
+        simulate: result.simulate,
+        logs: result
+            .logs
+            .into_iter()
+            .map(|log| OrdenLog {
+                level: log.level,
+                sender: log.sender,
+                rule_nr: log.rule_nr,
+                path: log.path,
+                msg: log.msg,
+            })
+            .collect(),
+    }
+}
+
+/// Start a simulated or real Orden execution on a dedicated worker thread.
 #[tauri::command]
 pub fn orden_run_cmd(
     yaml: String,
     simulate: bool,
     tags: Vec<String>,
     skip_tags: Vec<String>,
-) -> Result<OrdenRunResult, String> {
-    let config_name =
-        find_orden_config_name_for_yaml(&yaml).unwrap_or_else(|| "<ad-hoc>".to_string());
-    let opts = crate::orden::ExecuteOptions {
-        simulate,
-        tags: tags.into_iter().collect(),
-        skip_tags: skip_tags.into_iter().collect(),
-        working_dir: std::env::current_dir().unwrap_or_default(),
-    };
-    let r = match crate::orden::run_yaml(&yaml, &opts) {
-        Ok(result) => result,
-        Err(error) => {
-            log_orden_failure(&config_name, simulate, "manual", &error);
-            return Err(error);
-        }
-    };
-    let _ = log_orden_run(
-        &config_name,
-        simulate,
-        r.success as i64,
-        r.errors as i64,
-        "manual",
-        &serde_json::to_string(&r.logs).unwrap_or_else(|_| "[]".to_string()),
-    );
-    Ok(OrdenRunResult {
-        success: r.success,
-        errors: r.errors,
-        simulate: r.simulate,
-        logs: r
-            .logs
-            .into_iter()
-            .map(|l| OrdenLog {
-                level: l.level,
-                sender: l.sender,
-                rule_nr: l.rule_nr,
-                path: l.path,
-                msg: l.msg,
-            })
-            .collect(),
-    })
+) -> Result<crate::orden_runtime::OrdenTaskHandle, String> {
+    let task = crate::orden_runtime::spawn(move || {
+        let config_name =
+            find_orden_config_name_for_yaml(&yaml).unwrap_or_else(|| "<ad-hoc>".to_string());
+        let opts = crate::orden::ExecuteOptions {
+            simulate,
+            tags: tags.into_iter().collect(),
+            skip_tags: skip_tags.into_iter().collect(),
+            working_dir: std::env::current_dir().unwrap_or_default(),
+        };
+        let result = match crate::orden::run_yaml(&yaml, &opts) {
+            Ok(result) => result,
+            Err(error) => {
+                log_orden_failure(&config_name, simulate, "manual", &error);
+                return Err(error);
+            }
+        };
+        let _ = log_orden_run(
+            &config_name,
+            simulate,
+            result.success as i64,
+            result.errors as i64,
+            "manual",
+            &serde_json::to_string(&result.logs).unwrap_or_else(|_| "[]".to_string()),
+        );
+        serde_json::to_value(map_run_result(result)).map_err(|error| error.to_string())
+    });
+    Ok(task)
+}
+
+#[tauri::command]
+pub fn orden_task_status_cmd(
+    task_id: String,
+) -> Result<crate::orden_runtime::OrdenTaskStatus, String> {
+    crate::orden_runtime::status(&task_id)
 }
 
 fn parse_visual_rule(idx: usize, value: &serde_yaml::Value) -> Result<OrdenVisualRule, String> {
@@ -547,51 +786,39 @@ pub fn orden_delete_job_cmd(id: i64) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn orden_run_job_cmd(job: OrdenJob) -> Result<OrdenRunResult, String> {
-    let yaml = get_orden_config(&job.config_name)
-        .map_err(|e| e.to_string())?
-        .map(|record| record.yaml)
-        .ok_or_else(|| format!("Orden config '{}' not found", job.config_name))?;
-    let opts = crate::orden::ExecuteOptions {
-        simulate: job.simulate,
-        tags: split_csv(&job.tags).into_iter().collect(),
-        skip_tags: split_csv(&job.skip_tags).into_iter().collect(),
-        working_dir: std::env::current_dir().unwrap_or_default(),
-    };
-    let r = match crate::orden::run_yaml(&yaml, &opts) {
-        Ok(result) => result,
-        Err(error) => {
-            log_orden_failure(&job.config_name, job.simulate, "manual-job", &error);
-            return Err(error);
+pub fn orden_run_job_cmd(job: OrdenJob) -> Result<crate::orden_runtime::OrdenTaskHandle, String> {
+    let task = crate::orden_runtime::spawn(move || {
+        let yaml = get_orden_config(&job.config_name)
+            .map_err(|e| e.to_string())?
+            .map(|record| record.yaml)
+            .ok_or_else(|| format!("Orden config '{}' not found", job.config_name))?;
+        let opts = crate::orden::ExecuteOptions {
+            simulate: job.simulate,
+            tags: split_csv(&job.tags).into_iter().collect(),
+            skip_tags: split_csv(&job.skip_tags).into_iter().collect(),
+            working_dir: std::env::current_dir().unwrap_or_default(),
+        };
+        let result = match crate::orden::run_yaml(&yaml, &opts) {
+            Ok(result) => result,
+            Err(error) => {
+                log_orden_failure(&job.config_name, job.simulate, "manual-job", &error);
+                return Err(error);
+            }
+        };
+        let _ = log_orden_run(
+            &job.config_name,
+            job.simulate,
+            result.success as i64,
+            result.errors as i64,
+            "manual-job",
+            &serde_json::to_string(&result.logs).unwrap_or_else(|_| "[]".to_string()),
+        );
+        if let Some(id) = job.id {
+            let _ = mark_orden_job_run(id);
         }
-    };
-    let _ = log_orden_run(
-        &job.config_name,
-        job.simulate,
-        r.success as i64,
-        r.errors as i64,
-        "manual-job",
-        &serde_json::to_string(&r.logs).unwrap_or_else(|_| "[]".to_string()),
-    );
-    if let Some(id) = job.id {
-        let _ = mark_orden_job_run(id);
-    }
-    Ok(OrdenRunResult {
-        success: r.success,
-        errors: r.errors,
-        simulate: r.simulate,
-        logs: r
-            .logs
-            .into_iter()
-            .map(|l| OrdenLog {
-                level: l.level,
-                sender: l.sender,
-                rule_nr: l.rule_nr,
-                path: l.path,
-                msg: l.msg,
-            })
-            .collect(),
-    })
+        serde_json::to_value(map_run_result(result)).map_err(|error| error.to_string())
+    });
+    Ok(task)
 }
 
 fn split_csv(value: &str) -> Vec<String> {
@@ -617,6 +844,36 @@ fn log_orden_failure(config_name: &str, simulate: bool, trigger: &str, error: &s
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn temp_data_dir(name: &str) -> std::path::PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!("shelfy-{name}-{}-{nonce}", std::process::id()))
+    }
+
+    #[test]
+    fn ensure_templates_refreshes_system_yaml_and_preserves_custom_files() {
+        let root = temp_data_dir("templates");
+        let templates_dir = orden_templates_dir(&root);
+        std::fs::create_dir_all(&templates_dir).unwrap();
+        std::fs::write(templates_dir.join("backup-pdfs.yaml"), "stale").unwrap();
+        std::fs::write(templates_dir.join("my-template.yaml"), "custom").unwrap();
+
+        ensure_orden_templates(&root).unwrap();
+
+        let backup = find_system_template("backup-pdfs").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(templates_dir.join("backup-pdfs.yaml")).unwrap(),
+            backup.yaml
+        );
+        assert_eq!(
+            std::fs::read_to_string(templates_dir.join("my-template.yaml")).unwrap(),
+            "custom"
+        );
+        std::fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn visual_parser_keeps_complete_filter_and_action_pipelines() {
@@ -652,5 +909,21 @@ rules:
             .value
             .contains("continue_with: original"));
         assert_eq!(rule.action_steps[1].kind, "shell");
+    }
+
+    #[test]
+    fn valid_template_name_strips_yaml_extension_case_insensitively() {
+        // matches the frontend regex /\\.ya?ml$/i so custom-{{name}} ids stay
+        // in sync between client and server (see orden_template_save_cmd).
+        assert_eq!(valid_template_name("foo").unwrap(), "foo");
+        assert_eq!(valid_template_name("foo.yaml").unwrap(), "foo");
+        assert_eq!(valid_template_name("foo.yml").unwrap(), "foo");
+        assert_eq!(valid_template_name("foo.YAML").unwrap(), "foo");
+        assert_eq!(valid_template_name("foo.Yml").unwrap(), "foo");
+        assert_eq!(valid_template_name("  foo.YAML ").unwrap(), "foo");
+        assert_eq!(valid_template_name("foo.tar.gz").unwrap(), "foo.tar.gz");
+        assert!(valid_template_name("").is_err());
+        assert!(valid_template_name("../etc").is_err());
+        assert!(valid_template_name("a/b").is_err());
     }
 }

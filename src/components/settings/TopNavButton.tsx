@@ -16,10 +16,10 @@ export function TopNavButton({ active, onClick, icon, label }: TopNavButtonProps
       variant="ghost"
       size="sm"
       aria-current={active ? "page" : undefined}
-      className={`h-9 shrink-0 rounded-xl px-3 transition-colors ${
+      className={`h-8 shrink-0 rounded-md px-2.5 transition-colors ${
         active
-          ? "bg-background/85 text-foreground shadow-sm ring-1 ring-border/70"
-          : "text-muted-foreground hover:bg-background/55 hover:text-foreground"
+          ? "bg-primary text-primary-foreground shadow-sm"
+          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       }`}
     >
       {icon}

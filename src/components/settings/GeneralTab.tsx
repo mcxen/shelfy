@@ -104,14 +104,14 @@ export function GeneralTab({
 
   return (
     <div className="w-full space-y-4">
-      <Card className="grid gap-4 p-4 md:grid-cols-2">
+      <Card className="grid gap-x-6 gap-y-3 p-3.5 md:grid-cols-2">
         <div className="md:col-span-2">
           <h2 className="text-lg font-semibold">{t("settings.general.title")}</h2>
         </div>
         <div>
           <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.general.language")}</Label>
           <Select value={settings?.language || "en"} onValueChange={handleChangeLanguage}>
-            <SelectTrigger>
+            <SelectTrigger className="max-w-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -129,7 +129,7 @@ export function GeneralTab({
         <div>
           <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.general.theme")}</Label>
           <Select value={settings?.theme || "system"} onValueChange={(value) => settings && saveSettings({ ...settings, theme: value })}>
-            <SelectTrigger>
+            <SelectTrigger className="max-w-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -139,7 +139,7 @@ export function GeneralTab({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background/45 px-3 py-2">
+        <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/25 px-3 py-2 md:col-span-2">
           <Label className="text-sm text-muted-foreground">{t("settings.general.startWithSystem")}</Label>
           <Switch checked={settings?.autostart || false} onCheckedChange={(checked) => setAutostart(checked)} />
         </div>
@@ -149,17 +149,17 @@ export function GeneralTab({
             <Label className="text-sm text-muted-foreground">{t("settings.general.gracePeriod")}</Label>
             <span className="text-xs text-muted-foreground">{formatDuration(currentGraceSeconds)}</span>
           </div>
-          <Slider min={0} max={graceSteps.length - 1} step={1} value={[sliderIndex]} onValueChange={([value]) => handleGraceSliderChange(value)} />
-          <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_auto]">
+          <div className="max-w-3xl"><Slider min={0} max={graceSteps.length - 1} step={1} value={[sliderIndex]} onValueChange={([value]) => handleGraceSliderChange(value)} /></div>
+          <div className="grid max-w-sm gap-2 grid-cols-[minmax(0,1fr)_7.5rem]">
             <Input
               type="number"
               min={0}
               value={graceValue}
               onChange={(e) => handleGraceNumberChange(parseInt(e.target.value, 10) || 0, graceUnit)}
-              className="w-full"
+              className="w-full tabular-nums"
             />
             <Select value={graceUnit} onValueChange={(value) => handleGraceNumberChange(graceValue, value as GraceUnit)}>
-              <SelectTrigger className="w-full sm:min-w-32">
+              <SelectTrigger className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -173,7 +173,7 @@ export function GeneralTab({
           <p className="text-xs text-muted-foreground">{t("settings.general.gracePeriodDesc")}</p>
         </div>
 
-        <div className="flex items-center justify-between rounded-xl border border-border/60 bg-background/45 px-3 py-2 md:col-span-2">
+        <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/25 px-3 py-2 md:col-span-2">
           <div>
             <Label className="text-sm text-muted-foreground">{t("settings.general.checkFileLock")}</Label>
             <p className="text-xs text-muted-foreground">{t("settings.general.checkFileLockDesc")}</p>
@@ -188,7 +188,7 @@ export function GeneralTab({
         </div>
       </Card>
 
-      <Card className="space-y-4 p-4">
+      <Card className="space-y-3 p-3.5">
         <div>
           <h3 className="flex items-center gap-2 text-base font-semibold">
             <SlidersHorizontal size={16} className="text-primary" />
@@ -197,7 +197,7 @@ export function GeneralTab({
           <p className="text-xs text-muted-foreground">{t("settings.scheduler.desc")}</p>
         </div>
 
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
           <Label className="text-sm text-muted-foreground">{t("settings.scheduler.enable")}</Label>
           <Switch checked={localSchedule.schedule_enabled} onCheckedChange={(checked) => handleScheduleChange({ schedule_enabled: checked })} />
         </div>
@@ -205,7 +205,7 @@ export function GeneralTab({
         <div>
           <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.scheduler.timesPerDay")}</Label>
           <Select value={String(localSchedule.schedule_times_per_day)} onValueChange={(value) => handleScheduleChange({ schedule_times_per_day: parseInt(value, 10) })}>
-            <SelectTrigger>
+            <SelectTrigger className="max-w-sm">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -217,7 +217,7 @@ export function GeneralTab({
           </Select>
         </div>
 
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid max-w-3xl gap-2 sm:grid-cols-2 lg:grid-cols-4">
           {Array.from({ length: localSchedule.schedule_times_per_day }).map((_, idx) => {
             const key = `schedule_time_${idx + 1}` as keyof ScheduleSettings;
             return (
@@ -233,7 +233,7 @@ export function GeneralTab({
           })}
         </div>
 
-        <div className="space-y-3 rounded-xl border border-border bg-card/50 p-3 shadow-sm">
+        <section className="space-y-3 rounded-lg border border-border/70 bg-muted/15 p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <Label className="text-sm text-muted-foreground">{t("settings.scheduler.cronEnable")}</Label>
@@ -241,7 +241,7 @@ export function GeneralTab({
             </div>
             <Switch checked={localSchedule.schedule_cron_enabled} onCheckedChange={(checked) => handleScheduleChange({ schedule_cron_enabled: checked })} />
           </div>
-          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <div className="grid max-w-3xl gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
             <div className="flex-1">
               <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.scheduler.cronExpression")}</Label>
               <Input
@@ -256,9 +256,9 @@ export function GeneralTab({
               {t("settings.scheduler.validateCron")}
             </Button>
           </div>
-        </div>
+        </section>
 
-        <div className="space-y-3 rounded-xl border border-border bg-card/50 p-3 shadow-sm">
+        <section className="space-y-3 rounded-lg border border-border/70 bg-muted/15 p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <Label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -290,11 +290,11 @@ export function GeneralTab({
             </Button>
           </div>
           {!systemKeepaliveSupported && <p className="text-xs text-muted-foreground">{t("settings.scheduler.keepaliveUnsupported")}</p>}
-        </div>
+        </section>
 
         {scheduleToast && (
           <div
-            className={`rounded-xl border px-3 py-2 text-xs shadow-sm ${
+            className={`rounded-lg border px-3 py-2 text-xs ${
               scheduleToast.type === "success"
                 ? "border-primary/25 bg-primary/8 text-primary"
                 : "border-destructive/20 bg-destructive/10 text-destructive"
@@ -317,7 +317,7 @@ export function GeneralTab({
               <Button onClick={clearSchedulerLogs} variant="ghost" size="sm">{t("settings.scheduler.clearLogs")}</Button>
             </div>
           </div>
-          <div className="max-h-40 overflow-auto rounded-xl border border-border bg-muted/30">
+          <div className="max-h-40 overflow-auto rounded-lg border border-border bg-muted/30">
             {schedulerLogs.length === 0 ? (
               <div className="px-3 py-2 text-xs text-muted-foreground">{t("settings.scheduler.noLogs")}</div>
             ) : (
@@ -335,7 +335,7 @@ export function GeneralTab({
         </div>
       </Card>
 
-      <Card className="space-y-4 p-4">
+      <Card className="space-y-3 p-3.5">
         <div>
           <h3 className="flex items-center gap-2 text-base font-semibold">
             <Bot size={16} className="text-primary" />
@@ -344,7 +344,7 @@ export function GeneralTab({
           <p className="text-xs text-muted-foreground">{t("settings.mcp.desc")}</p>
         </div>
 
-        <div className="flex items-center justify-between rounded-xl border border-border bg-card/50 p-3 shadow-sm">
+        <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 p-3">
           <div>
             <Label className="text-sm text-muted-foreground">{t("settings.mcp.enable")}</Label>
             <p className="text-xs text-muted-foreground">{t("settings.mcp.enableDesc")}</p>
@@ -413,7 +413,7 @@ export function GeneralTab({
 
         {mcpToast && (
           <div
-            className={`rounded-xl border px-3 py-2 text-xs shadow-sm ${
+            className={`rounded-lg border px-3 py-2 text-xs ${
               mcpToast.type === "success"
                 ? "border-primary/25 bg-primary/8 text-primary"
                 : "border-destructive/20 bg-destructive/10 text-destructive"
@@ -434,7 +434,7 @@ export function GeneralTab({
         </div>
       </Card>
 
-      <Card className="space-y-4 p-4">
+      <Card className="space-y-3 p-3.5">
         <div>
           <h3 className="text-base font-semibold">{t("settings.config.title")}</h3>
           <p className="text-xs text-muted-foreground">{t("settings.config.desc")}</p>
@@ -455,7 +455,7 @@ export function GeneralTab({
         </Label>
         {configToast && (
           <div
-            className={`rounded-xl border px-3 py-2 text-xs shadow-sm ${
+            className={`rounded-lg border px-3 py-2 text-xs ${
               configToast.type === "success"
                 ? "border-primary/25 bg-primary/8 text-primary"
                 : "border-destructive/20 bg-destructive/10 text-destructive"

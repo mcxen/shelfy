@@ -65,6 +65,8 @@
       "actionSettingsDesc": "设置匹配文件的移动、复制或忽略行为。",
       "delete": "删除",
       "deleteConfirm": "确定删除规则“{{name}}”吗？此操作无法撤销。",
+      "deleteError": "删除规则失败",
+      "deleting": "删除中…",
       "name": "名称",
       "extensions": "扩展名",
       "destination": "目标位置",
@@ -346,7 +348,79 @@
       "deleteHistory": "删除运行记录",
       "deleteHistoryConfirm": "确定删除这次 Orden 运行记录吗？",
       "clearHistory": "清空运行记录",
-      "clearHistoryConfirm": "确定清空此 Orden 配置的全部运行记录吗？"
+      "clearHistoryConfirm": "确定清空此 Orden 配置的全部运行记录吗？",
+      "templates": {
+        "tab": "模版中心",
+        "title": "Orden 模版中心",
+        "description": "浏览系统提供的整理方案，也可以把自己的 Orden 配置保存为模版。",
+        "badge": "Orden Template Gallery",
+        "heroTitle": "让每一次整理，都从一个好模版开始",
+        "heroDescription": "选择一个模版查看完整规则，点击加号即可加入 Orden 配置。模版会先保存为独立配置，方便继续调整、校验和运行。",
+        "sections": {
+          "all": "全部模版",
+          "system": "系统模版",
+          "custom": "我的模版"
+        },
+        "categories": {
+          "organize": "文件整理",
+          "automation": "自动化",
+          "backup": "备份",
+          "maintenance": "维护",
+          "custom": "自定义"
+        },
+        "search": "搜索模版",
+        "chooseConfig": "选择 Orden 配置",
+        "saveAsTemplate": "保存为模版",
+        "saveAsCustom": "另存为自定义模版",
+        "saveChanges": "保存修改",
+        "customNameLabel": "自定义模版名称",
+        "customName": "输入新的模版名称（不能包含路径分隔符）",
+        "customNameDescription": "填写名称后保存，完成后会自动进入“我的模版”。",
+        "yamlLabel": "模版 YAML",
+        "viewTemplate": "查看模版“{{name}}”",
+        "createPrompt": "为这个 Orden 配置命名模版",
+        "customDescription": "从配置“{{config}}”创建的自定义模版。",
+        "addToOrden": "加入 Orden",
+        "delete": "删除模版",
+        "deleteConfirm": "确定删除自定义模版“{{name}}”吗？",
+        "unsavedConfirm": "模版 YAML 尚未保存，确定要舍弃修改吗？",
+        "addedNotice": "模版已加入 Orden 配置",
+        "addError": "加入 Orden 配置失败",
+        "createdNotice": "自定义模版已创建",
+        "createError": "创建模版失败",
+        "savedNotice": "模版已保存到本地",
+        "saveError": "模版名称和 YAML 不能为空，且配置必须有效",
+        "deletedNotice": "模版已删除",
+        "deleteError": "删除模版失败",
+        "empty": "没有找到匹配的模版。",
+        "emptyCustom": "还没有自定义模版。可以将系统模版另存，或从右上角选择 Orden 配置保存。",
+        "system": {
+          "images": {
+            "title": "整理图片",
+            "description": "将下载目录中的常见图片移动到 Pictures/Inbox。"
+          },
+          "documents": {
+            "title": "整理文档",
+            "description": "将 PDF、Office 文档集中移动到 Documents/Inbox。"
+          },
+          "archives": {
+            "title": "整理压缩包",
+            "description": "把 ZIP、7z、RAR 等压缩包收纳到 Downloads/Archives。"
+          },
+          "extract": {
+            "title": "自动解压下载",
+            "description": "下载完成后自动将压缩包解压到 Unpacked 文件夹。"
+          },
+          "backup": {
+            "title": "备份重要 PDF",
+            "description": "复制 Documents 中的 PDF 到独立备份目录。"
+          },
+          "cleanup": {
+            "title": "清理临时文件",
+            "description": "将下载目录中的临时文件移入废纸篓。"
+          }
+        }
+      }
     },
     "about": {
       "title": "关于",

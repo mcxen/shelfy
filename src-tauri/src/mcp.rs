@@ -286,7 +286,13 @@ fn run_orden_tool(args: Value, simulate: bool) -> Result<Value, String> {
         skip_tags: skip_tags.into_iter().collect(),
         working_dir: std::env::current_dir().unwrap_or_default(),
     };
-    match crate::orden::run_yaml(&yaml, &opts) {
+    let execution = std::thread::Builder::new()
+        .name("orden-mcp".to_string())
+        .spawn(move || crate::orden::run_yaml(&yaml, &opts))
+        .map_err(|error| format!("Failed to start Orden MCP worker: {error}"))?
+        .join()
+        .map_err(|_| "Orden MCP worker thread panicked".to_string())?;
+    match execution {
         Ok(result) => {
             let logs_json = serde_json::to_string(&result.logs).unwrap_or_else(|_| "[]".into());
             log_orden_run(

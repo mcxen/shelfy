@@ -65,6 +65,8 @@
       "actionSettingsDesc": "Move, copy, or ignore files after they match.",
       "delete": "Delete",
       "deleteConfirm": "Delete rule “{{name}}”? This cannot be undone.",
+      "deleteError": "Failed to delete rule",
+      "deleting": "Deleting…",
       "name": "Name",
       "extensions": "Extensions",
       "destination": "Destination",
@@ -346,7 +348,79 @@
       "deleteHistory": "Delete run history",
       "deleteHistoryConfirm": "Delete this Orden run record?",
       "clearHistory": "Clear runs",
-      "clearHistoryConfirm": "Clear all run history for this Orden configuration?"
+      "clearHistoryConfirm": "Clear all run history for this Orden configuration?",
+      "templates": {
+        "tab": "Template Gallery",
+        "title": "Orden Template Gallery",
+        "description": "Browse ready-made workflows or save your own Orden configurations as reusable templates.",
+        "badge": "Orden Template Gallery",
+        "heroTitle": "Start every cleanup with a great template",
+        "heroDescription": "Open a template to inspect its rules, then use the plus button to add it as a new Orden configuration. You can review, validate, and run it from there.",
+        "sections": {
+          "all": "All templates",
+          "system": "System templates",
+          "custom": "My templates"
+        },
+        "categories": {
+          "organize": "Organize",
+          "automation": "Automation",
+          "backup": "Backup",
+          "maintenance": "Maintenance",
+          "custom": "Custom"
+        },
+        "search": "Search templates",
+        "chooseConfig": "Choose an Orden config",
+        "saveAsTemplate": "Save as template",
+        "saveAsCustom": "Save as custom template",
+        "saveChanges": "Save changes",
+        "customNameLabel": "Custom template name",
+        "customName": "New template name (path separators are not allowed)",
+        "customNameDescription": "Enter a name and save. The new template will open under My Templates.",
+        "yamlLabel": "Template YAML",
+        "viewTemplate": "View template “{{name}}”",
+        "createPrompt": "Name this Orden configuration template",
+        "customDescription": "Custom template created from “{{config}}”.",
+        "addToOrden": "Add to Orden",
+        "delete": "Delete template",
+        "deleteConfirm": "Delete custom template “{{name}}”?",
+        "unsavedConfirm": "Discard unsaved changes to the template YAML?",
+        "addedNotice": "Template added to Orden configurations",
+        "addError": "Failed to add template to Orden",
+        "createdNotice": "Custom template created",
+        "createError": "Failed to create template",
+        "savedNotice": "Template saved locally",
+        "saveError": "Template name and YAML are required, and the config must be valid",
+        "deletedNotice": "Template deleted",
+        "deleteError": "Failed to delete template",
+        "empty": "No templates match your search.",
+        "emptyCustom": "You do not have any custom templates yet. Save a system template or choose an Orden configuration above.",
+        "system": {
+          "images": {
+            "title": "Sort images",
+            "description": "Move common image files from Downloads into Pictures/Inbox."
+          },
+          "documents": {
+            "title": "Sort documents",
+            "description": "Collect PDF and Office documents in Documents/Inbox."
+          },
+          "archives": {
+            "title": "Sort archives",
+            "description": "Keep ZIP, 7z, RAR, and other archives in Downloads/Archives."
+          },
+          "extract": {
+            "title": "Auto-extract downloads",
+            "description": "Automatically unpack downloaded archives into an Unpacked folder."
+          },
+          "backup": {
+            "title": "Back up important PDFs",
+            "description": "Copy PDFs from Documents into a dedicated backup folder."
+          },
+          "cleanup": {
+            "title": "Clean temporary files",
+            "description": "Send temporary download files to the system trash."
+          }
+        }
+      }
     },
     "about": {
       "title": "About",

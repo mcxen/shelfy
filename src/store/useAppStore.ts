@@ -144,6 +144,17 @@ export interface OrdenRunResult {
   logs: OrdenLog[];
 }
 
+interface OrdenTaskHandle {
+  task_id: string;
+}
+
+interface OrdenTaskStatus {
+  task_id: string;
+  state: 'queued' | 'running' | 'completed' | 'failed';
+  result: OrdenRunResult | null;
+  error: string | null;
+}
+
 export interface OrdenRunHistory {
   id?: number;
   config_name: string;
@@ -227,6 +238,59 @@ export interface OrdenQuickTask {
   yaml: string;
 }
 
+export interface OrdenTemplate {
+  id: string;
+  name: string;
+  yaml: string;
+  is_system: boolean;
+  title_key: string | null;
+  description_key: string | null;
+  category_key: string | null;
+  icon: string;
+  tone: string;
+}
+
+// Orden tasks poll the backend for completion. If a file operation hangs
+// indefinitely, polling would otherwise continue forever and ordenBusy would
+// never recover. AbortSignal allows callers (and window unload) to cancel,
+// and a hard deadline caps the wait so the UI can recover.
+let ordenTaskAbort: AbortController | null = null;
+function startOrdenTaskAbort(): AbortSignal {
+  ordenTaskAbort?.abort();
+  ordenTaskAbort = new AbortController();
+  return ordenTaskAbort.signal;
+}
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => { ordenTaskAbort?.abort(); });
+}
+
+const ORDEN_TASK_TIMEOUT_MS = 15 * 60 * 1000;
+
+async function waitForOrdenTask(taskId: string, signal: AbortSignal): Promise<OrdenRunResult> {
+  const pollIntervalMs = 120;
+  const startedAt = Date.now();
+  while (true) {
+    if (signal.aborted) throw new Error('Orden task aborted');
+    const status = await invoke<OrdenTaskStatus>('orden_task_status_cmd', { taskId });
+    if (status.state === 'completed' && status.result) {
+      return status.result;
+    }
+    if (status.state === 'failed') {
+      throw new Error(status.error || 'Orden task failed');
+    }
+    if (Date.now() - startedAt > ORDEN_TASK_TIMEOUT_MS) {
+      throw new Error('Orden task timed out');
+    }
+    await new Promise<void>((resolve, reject) => {
+      const timer = window.setTimeout(resolve, pollIntervalMs);
+      signal.addEventListener('abort', () => {
+        window.clearTimeout(timer);
+        reject(new Error('Orden task aborted'));
+      }, { once: true });
+    });
+  }
+}
+
 // The default example orden config: scan downloads for .html files and copy
 // them into a "网页" (web pages) subfolder.
 export const DEFAULT_ORDEN_EXAMPLE = `rules:
@@ -290,6 +354,10 @@ interface AppState {
   ordenLoad: (name: string) => Promise<string>;
   ordenSave: (name: string, yaml: string) => Promise<void>;
   ordenDelete: (name: string) => Promise<void>;
+  ordenTemplateList: () => Promise<OrdenTemplate[]>;
+  ordenTemplateLoad: (name: string) => Promise<string>;
+  ordenTemplateSave: (name: string, yaml: string) => Promise<void>;
+  ordenTemplateDelete: (name: string) => Promise<void>;
   ordenCheck: (yaml: string) => Promise<void>;
   ordenRun: (yaml: string, simulate: boolean, tags: string[], skipTags: string[]) => Promise<OrdenRunResult>;
   ordenVisualFromYaml: (yaml: string) => Promise<OrdenVisualConfig>;
@@ -300,6 +368,7 @@ interface AppState {
   ordenSaveJob: (job: OrdenJob) => Promise<number>;
   ordenDeleteJob: (id: number) => Promise<void>;
   ordenRunJob: (job: OrdenJob) => Promise<OrdenRunResult>;
+  cancelOrdenTask: () => void;
   getMcpClientConfig: () => Promise<McpClientConfig>;
   getOrdenQuickTasks: () => Promise<OrdenQuickTask[]>;
   runOrdenQuickTask: (yaml: string, simulate: boolean) => Promise<OrdenRunResult>;
@@ -541,11 +610,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   ordenDelete: async (name) => {
     await invoke('orden_delete_cmd', { name });
   },
+  ordenTemplateList: async () => {
+    return await invoke<OrdenTemplate[]>('orden_template_list_cmd');
+  },
+  ordenTemplateLoad: async (name) => {
+    return await invoke<string>('orden_template_load_cmd', { name });
+  },
+  ordenTemplateSave: async (name, yaml) => {
+    await invoke('orden_template_save_cmd', { name, yaml });
+  },
+  ordenTemplateDelete: async (name) => {
+    await invoke('orden_template_delete_cmd', { name });
+  },
   ordenCheck: async (yaml) => {
     await invoke('orden_check_cmd', { yaml });
   },
   ordenRun: async (yaml, simulate, tags, skipTags) => {
-    return await invoke<OrdenRunResult>('orden_run_cmd', { yaml, simulate, tags, skipTags });
+    const handle = await invoke<OrdenTaskHandle>('orden_run_cmd', { yaml, simulate, tags, skipTags });
+    return await waitForOrdenTask(handle.task_id, startOrdenTaskAbort());
   },
   ordenVisualFromYaml: async (yaml) => {
     return await invoke<OrdenVisualConfig>('orden_visual_from_yaml_cmd', { yaml });
@@ -569,8 +651,10 @@ export const useAppStore = create<AppState>((set, get) => ({
     await invoke('orden_delete_job_cmd', { id });
   },
   ordenRunJob: async (job) => {
-    return await invoke<OrdenRunResult>('orden_run_job_cmd', { job });
+    const handle = await invoke<OrdenTaskHandle>('orden_run_job_cmd', { job });
+    return await waitForOrdenTask(handle.task_id, startOrdenTaskAbort());
   },
+  cancelOrdenTask: () => { ordenTaskAbort?.abort(); },
   getMcpClientConfig: async () => {
     return await invoke<McpClientConfig>('mcp_client_config_cmd');
   },
