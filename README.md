@@ -1,5 +1,7 @@
 # Shelfy
 
+![Shelfy](docs/shelfylogo.png)
+
 Minimal local automation for files, folders, backups, and AI workflows.
 
 ![Shelfy hero](docs/assets/shelfy-hero.png)
@@ -126,4 +128,4 @@ Shelfy is designed to run locally. File names, rules, logs, and settings stay on
 
 ## License
 
-MIT
+AGPL-3.0

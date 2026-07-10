@@ -422,7 +422,7 @@ export default function Popup() {
       {/* Quick task result toast */}
       {taskResult && (
         <div className="px-3 pb-3">
-          <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700 shadow-sm dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300">
+          <div className="rounded-xl border border-primary/25 bg-primary/8 px-3 py-2 text-xs text-primary shadow-sm">
             {taskResult.simulated
               ? t("popup.taskSimulated", { name: taskResult.name, count: taskResult.count })
               : t("popup.taskRan", { name: taskResult.name, count: taskResult.count })}

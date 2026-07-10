@@ -200,7 +200,7 @@ export function RulesTab({
           <div
             className={`rounded-xl border px-3 py-2 text-xs shadow-sm ${
               ruleToast.type === "success"
-                ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
+                ? "border-primary/25 bg-primary/8 text-primary"
                 : "border-destructive/20 bg-destructive/10 text-destructive"
             }`}
           >

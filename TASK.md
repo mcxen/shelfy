@@ -187,6 +187,8 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] Popup 后台轮询从 5 秒全量刷新拆为 15 秒 pending / 60 秒 Orden tasks，并在窗口失焦时停止
 - [x] 移除未使用的隐藏 `main` WebView，自启动保持零窗口直到用户打开 UI
 - [x] tray 菜单增加监控状态、主面板、立即整理、Orden 自动化、监控目录和设置；语言/文件夹变化时刷新
+- [x] 除 Tray 小松鼠外，桌面端、移动端、安装包、网页 favicon 与界面品牌标记统一替换为松果圆角矩形图标
+- [x] 全局 UI 主题切换为深松针绿/鼠尾草绿/暖奶油品牌色，浅深模式同步，并将基础圆角收敛到 6px
 
 ## 关键技术决策
 
@@ -200,6 +202,7 @@ Settings → Advanced 是当前图形入口，支持：
 ## 当前阻塞
 
 - 暂无编译阻塞。`cargo test` 与前端 `npm run build` 已通过。
+- 品牌图标与主题替换已通过 `npm run build`、`cargo build`；Tray 资产哈希校验保持不变。
 - 剩余设计点：非 move/rename 的 orden 动作如何进入 Shelfy History/Undo 需要单独定义语义，避免 copy/delete/trash/shell 被现有“反向 rename”撤销逻辑误处理。
 
 ## 下一步

@@ -1503,8 +1503,8 @@ export default function Settings() {
                         return (
                           <TableRow key={name} data-state={name === ordenName ? "selected" : undefined}>
                             <TableCell><button type="button" className="text-left" onClick={() => handleOrdenPreview(name)}><div className="font-medium">{name}</div><div className="max-w-64 truncate text-xs text-muted-foreground">{ordenNotes[name] || t("settings.orden.noNote")}</div></button></TableCell>
-                            <TableCell><Badge variant="outline" className="gap-1.5"><span aria-hidden="true" className={`size-1.5 rounded-full ${status === "success" ? "bg-emerald-500" : status === "failed" ? "bg-red-500" : "bg-muted-foreground/64"}`} />{t(`settings.orden.status_${status}`)}</Badge></TableCell>
-                            <TableCell><Badge variant="outline" className="gap-1.5"><span aria-hidden="true" className={`size-1.5 rounded-full ${scheduled ? "bg-emerald-500" : "bg-muted-foreground/64"}`} />{scheduled ? t("settings.orden.running") : t("settings.orden.stopped")}</Badge></TableCell>
+                            <TableCell><Badge variant="outline" className="gap-1.5"><span aria-hidden="true" className={`size-1.5 rounded-full ${status === "success" ? "bg-primary" : status === "failed" ? "bg-destructive" : "bg-muted-foreground/64"}`} />{t(`settings.orden.status_${status}`)}</Badge></TableCell>
+                            <TableCell><Badge variant="outline" className="gap-1.5"><span aria-hidden="true" className={`size-1.5 rounded-full ${scheduled ? "bg-primary" : "bg-muted-foreground/64"}`} />{scheduled ? t("settings.orden.running") : t("settings.orden.stopped")}</Badge></TableCell>
                             <TableCell className="text-xs text-muted-foreground">{last ? new Date(last.timestamp).toLocaleString() : "—"}</TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-1">
@@ -1556,7 +1556,7 @@ export default function Settings() {
               <div
                 className={`rounded-xl border px-3 py-2 text-xs shadow-sm ${
                   ordenToast.type === "success"
-                    ? "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950 dark:text-emerald-300"
+                    ? "border-primary/25 bg-primary/8 text-primary"
                     : "border-destructive/20 bg-destructive/10 text-destructive"
                 }`}
               >

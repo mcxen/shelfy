@@ -6,23 +6,25 @@ Shelfy is a quiet cross-platform backup and file organizer. It supports document
 
 ## Design System
 
-- Component baseline: shadcn/ui-style React components in `src/components/ui/*`.
+- Component baseline: coss/shadcn-style React components in `src/components/ui/*`.
 - Native-looking controls are not allowed in product screens. Buttons, selects, switches, checkboxes, sliders, labels, badges, cards, and separators must come from the local shadcn component layer.
 - Styling uses CSS variables in `src/index.css` and Tailwind utility classes. No component may hard-code a one-off visual system.
 - Cards are limited to repeated items, grouped controls, and toasts. Page sections use plain layout bands and spacing.
 
 ## Visual Tokens
 
-- Radius: `8px` for cards and primary controls, `6px` for compact controls.
-- Primary: teal, used for primary actions, active navigation, focus, and brand mark.
-- Accent: indigo/blue, reserved for secondary emphasis and informational states.
+- Radius: `6px` base, `8px` for cards and major controls, with full pills reserved for switches, progress tracks, and status dots.
+- Primary: pine green `#1F4A37`, used for primary actions, active navigation, focus, and brand mark.
+- Accent: sage `#6F8A69` and emerald `#1E7A5A`, reserved for secondary emphasis and informational states.
+- Warm surfaces: cream `#F2E6C9`; gold `#E9CF8A` / `#C9A23D` is limited to restrained highlights.
 - Destructive: rose/red, used only for delete, clear, and irreversible actions.
 - Neutral surfaces: background, card, popover, muted, border, and input tokens.
 - Typography: system UI stack, 13-16px for operational surfaces, no viewport-scaled type.
 
 ## Iconography
 
-- Product icon: Lucide `Squirrel`, matching `https://lucide.dev/icons/squirrel`.
+- Product icon: the rounded-rectangle SHELFY pinecone badge in `src-tauri/icons/app-icon.png`; its smaller 80% body preserves platform-safe spacing.
+- Tray icon is the only squirrel mark and remains a monochrome template asset in `src-tauri/icons/tray-icon.*`.
 - All UI icons must be imported from `lucide-react`.
 - Animated icon behavior must use the `AnimatedIcon` wrapper, which follows the lucide-animated direction: subtle Motion-based hover/tap movement, reduced-motion aware.
 - Icons inside buttons are required when a Lucide symbol exists for the command.
