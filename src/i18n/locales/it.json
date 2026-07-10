@@ -1,0 +1,128 @@
+{
+  "app": {
+    "name": "Shelfy",
+    "tagline": "Scarichi, dimentichi – lui ricorda",
+    "loading": "Shelfy..."
+  },
+  "popup": {
+    "title": "Shelfy",
+    "cleanNow": "Pulisci ora",
+    "openDownloads": "Apri Download",
+    "recentActions": "Azioni recenti",
+    "noActions": "Nessuna azione",
+    "weeklyStats": "Questa settimana",
+    "undo": "Annulla",
+    "settings": "Impostazioni",
+    "quit": "Esci",
+    "organized": "Organizzato: {{file}}",
+    "openFolder": "Clicca per aprire → {{folder}}",
+    "pendingFiles": "{{count}} file in attesa",
+    "cleanManual": "Pulisci ora"
+  },
+  "settings": {
+    "title": "Impostazioni Shelfy",
+    "folders": {
+      "title": "Cartelle osservate",
+      "add": "Aggiungi cartella",
+      "remove": "Rimuovi",
+      "mode": "Modalità",
+      "silent": "Silenzioso",
+      "suggest": "Suggerisci",
+      "placeholder": "C:/Users/.../Downloads",
+      "modeSilent": "Silenzioso (auto)",
+      "modeManual": "Manuale (solo raccolta)",
+      "modePaused": "In pausa",
+      "modeDesc": "Scegli come Shelfy gestisce i file in questa cartella."
+    },
+    "rules": {
+      "title": "Regole",
+      "add": "Aggiungi regola",
+      "edit": "Modifica",
+      "delete": "Elimina",
+      "name": "Nome",
+      "extensions": "Estensioni",
+      "destination": "Destinazione",
+      "pattern": "Pattern (regex)",
+      "priority": "Priorità",
+      "action": "Azione",
+      "enabled": "Abilitata",
+      "export": "Esporta regole",
+      "import": "Importa regole",
+      "exportSuccess": "Regole esportate",
+      "importSuccess": "Importate {{count}} regole",
+      "importError": "Impossibile importare le regole",
+      "exportError": "Impossibile esportare le regole",
+      "replaceOnImport": "Sostituisci le regole esistenti (altrimenti aggiungi)"
+    },
+    "history": {
+      "title": "Cronologia",
+      "clear": "Cancella cronologia",
+      "undo": "Annulla",
+      "undone": "Annullato",
+      "empty": "Nessuna cronologia",
+      "revertAll": "Annulla tutto",
+      "revertAllDisabled": "Nessuna azione da annullare"
+    },
+    "general": {
+      "title": "Generale",
+      "language": "Lingua",
+      "theme": "Tema",
+      "themeSystem": "Sistema",
+      "themeLight": "Chiaro",
+      "themeDark": "Scuro",
+      "telemetry": "Abilita telemetria",
+      "startWithSystem": "Avvia con il sistema",
+      "gracePeriod": "Periodo di grazia",
+      "gracePeriodDesc": "Tempo di attesa prima di spostare un file dopo l'ultima modifica. 0 = istantaneo.",
+      "checkFileLock": "Verifica blocco file",
+      "checkFileLockDesc": "Salta i file attualmente in uso da un altro processo",
+      "gracePeriodSeconds": "Secondi",
+      "gracePeriodMinutes": "Minuti",
+      "gracePeriodHours": "Ore",
+      "gracePeriodCustom": "Personalizzato",
+      "gracePeriodMaxError": "Il periodo di grazia non può superare 7 giorni"
+    },
+    "ignore": {
+      "title": "Ignora",
+      "rulesTitle": "Regole di esclusione",
+      "description": "Scegli una cartella osservata e imposta i pattern per i file che Shelfy dovrebbe saltare. I pattern vengono salvati come file .shelfyignore in quella cartella.",
+      "folder": "Cartella",
+      "selectFolder": "Seleziona una cartella...",
+      "patterns": "Pattern",
+      "noRules": "Nessuna regola di esclusione. Aggiungine una qui sotto.",
+      "placeholder": "es. *.tmp o node_modules/",
+      "add": "Aggiungi",
+      "tips": "Suggerimenti:",
+      "save": "Salva .shelfyignore",
+      "saved": "Salvato!",
+      "remove": "Rimuovi"
+    },
+    "about": {
+      "title": "Informazioni",
+      "tagline": "I tuoi download, domati.",
+      "description": "Shelfy è un organizzatore di file silenzioso ed elegante che vive nella tua barra delle applicazioni e tiene in ordine automaticamente la cartella Download (e qualsiasi altra cartella). Funziona silenziosamente in background, monitora le cartelle selezionate e sposta, rinomina o ordina i file in base a regole personalizzabili.",
+      "checkUpdates": "Controlla aggiornamenti",
+      "support": "Supporta Shelfy su Ko-fi",
+      "supportDesc": "Il tuo supporto aiuta a migliorare Shelfy. Grazie! 🙏",
+      "builtBy": "Realizzato con cura da hsr"
+    },
+    "scheduler": {
+      "title": "Pianificazione",
+      "enable": "Abilita pulizia programmata",
+      "timesPerDay": "Volte al giorno",
+      "time": "Orario {{number}}",
+      "desc": "Esegui Pulisci ora automaticamente agli orari programmati.",
+      "once": "Una volta al giorno",
+      "twice": "Due volte al giorno",
+      "thrice": "3 volte al giorno",
+      "fourTimes": "4 volte al giorno"
+    }
+  },
+  "notifications": {
+    "cleaned": "Organizzati {{count}} file"
+  },
+  "common": {
+    "cancel": "Annulla",
+    "off": "Spento"
+  }
+}

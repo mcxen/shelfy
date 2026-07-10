@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Shelfy - 本地文件整理与自动化</title>
+  <meta name="description"
+    content="Shelfy 是一个本地优先的桌面文件整理工具。用规则整理下载目录、备份文件夹、定时执行任务、识别文本内容、解压和压缩归档文件。">
+  <meta name="keywords" content="文件整理, 下载目录整理, 文件夹备份, 本地自动化, Tauri, Rust, Orden">
+  <meta name="author" content="Shelfy">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://shelfy.cc">
+
+  <meta property="og:title" content="Shelfy - 本地文件整理与自动化">
+  <meta property="og:description" content="本地优先的桌面工具：整理文件、备份文件夹、定时任务、文本内容识别、压缩包处理。">
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="https://shelfy.cc">
+  <meta property="og:image" content="https://shelfy.cc/og-image.png">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="Shelfy - 本地文件整理与自动化">
+  <meta name="twitter:description" content="整理文件、备份文件夹、定时任务、文本内容识别、压缩包处理。">
+
+  <link rel="icon" type="image/png" href="./shelfylogo.png">
+  <link rel="apple-touch-icon" href="./shelfylogo.png">
+
+  <script type="application/ld+json">
+  {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "name": "Shelfy",
+    "description": "Shelfy is a local-first desktop utility for file organization, folder backup, scheduling, text-content matching, and archive automation.",
+    "applicationCategory": "UtilitiesApplication",
+    "operatingSystem": "Windows, macOS, Linux",
+    "offers": {
+      "@type": "Offer",
+      "price": "0",
+      "priceCurrency": "USD"
+    },
+    "softwareVersion": "0.1.3",
+    "license": "https://github.com/hsr88/shelfy/blob/main/LICENSE"
+  }
+  </script>
+
+  <style>
+    :root {
+      --bg: #f8fafc;
+      --fg: #0f172a;
+      --muted: #64748b;
+      --soft: #e2e8f0;
+      --line: #dbe4ee;
+      --card: rgba(255, 255, 255, 0.78);
+      --card-strong: #ffffff;
+      --primary: #0f766e;
+      --primary-2: #14b8a6;
+      --accent: #e0f2fe;
+      --code: #0b1120;
+      --radius: 22px;
+      --container: 1120px;
+      color-scheme: light;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        radial-gradient(circle at 18% 8%, rgba(20, 184, 166, 0.16), transparent 32rem),
+        radial-gradient(circle at 90% 12%, rgba(59, 130, 246, 0.12), transparent 28rem),
+        linear-gradient(180deg, #f8fafc 0%, #ffffff 46%, #f8fafc 100%);
+      color: var(--fg);
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    img {
+      display: block;
+      max-width: 100%;
+    }
+
+    .nav {
+      position: sticky;
+      top: 0;
+      z-index: 50;
+      border-bottom: 1px solid rgba(219, 228, 238, 0.75);
+      background: rgba(248, 250, 252, 0.82);
+      backdrop-filter: blur(18px);
+    }
+
+    .nav-inner {
+      width: min(var(--container), calc(100vw - 32px));
+      height: 68px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      letter-spacing: -0.02em;
+    }
+
+    .brand img {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 14px;
+      color: var(--muted);
+    }
+
+    .nav-links a {
+      padding: 9px 12px;
+      border-radius: 999px;
+    }
+
+    .nav-links a:hover {
+      background: #fff;
+      color: var(--fg);
+    }
+
+    .hero {
+      padding: 92px 0 74px;
+    }
+
+    .container {
+      width: min(var(--container), calc(100vw - 32px));
+      margin: 0 auto;
+    }
+
+    .hero-grid {
+      display: grid;
+      grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.72fr);
+      gap: 48px;
+      align-items: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      margin: 0 0 22px;
+      padding: 8px 12px;
+      border: 1px solid rgba(15, 118, 110, 0.18);
+      border-radius: 999px;
+      background: rgba(240, 253, 250, 0.9);
+      color: var(--primary);
+      font-size: 13px;
+      font-weight: 650;
+    }
+
+    h1 {
+      max-width: 760px;
+      margin: 0;
+      font-size: clamp(44px, 7vw, 88px);
+      line-height: 0.98;
+      letter-spacing: -0.06em;
+      font-weight: 760;
+    }
+
+    .hero-copy {
+      max-width: 680px;
+      margin: 24px 0 0;
+      color: var(--muted);
+      font-size: clamp(17px, 2vw, 21px);
+      line-height: 1.65;
+    }
+
+    .hero-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 34px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      padding: 0 18px;
+      border-radius: 999px;
+      font-size: 14px;
+      font-weight: 680;
+      border: 1px solid transparent;
+      transition: transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease, background 160ms ease;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+    }
+
+    .button.primary {
+      background: var(--primary);
+      color: #fff;
+      box-shadow: 0 16px 34px rgba(15, 118, 110, 0.24);
+    }
+
+    .button.secondary {
+      background: rgba(255, 255, 255, 0.8);
+      color: var(--fg);
+      border-color: var(--line);
+    }
+
+    .hero-card {
+      border: 1px solid rgba(219, 228, 238, 0.9);
+      border-radius: 30px;
+      background: rgba(255, 255, 255, 0.84);
+      box-shadow: 0 28px 80px rgba(15, 23, 42, 0.12);
+      overflow: hidden;
+    }
+
+    .window-bar {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      padding: 16px 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(248, 250, 252, 0.86);
+    }
+
+    .dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 999px;
+      background: #cbd5e1;
+    }
+
+    .app-preview {
+      padding: 22px;
+    }
+
+    .task {
+      display: grid;
+      grid-template-columns: 36px minmax(0, 1fr) auto;
+      gap: 12px;
+      align-items: center;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      background: #fff;
+      margin-bottom: 12px;
+    }
+
+    .task-icon {
+      width: 36px;
+      height: 36px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: #ccfbf1;
+      color: var(--primary);
+      font-weight: 800;
+    }
+
+    .task-title {
+      margin: 0 0 4px;
+      font-size: 14px;
+      font-weight: 750;
+    }
+
+    .task-meta {
+      margin: 0;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .pill {
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #f1f5f9;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 680;
+    }
+
+    .section {
+      padding: 86px 0;
+      border-top: 1px solid rgba(219, 228, 238, 0.8);
+    }
+
+    .section-head {
+      display: grid;
+      grid-template-columns: minmax(0, 0.8fr) minmax(280px, 0.52fr);
+      gap: 48px;
+      align-items: end;
+      margin-bottom: 36px;
+    }
+
+    .label {
+      margin: 0 0 12px;
+      color: var(--primary);
+      font-size: 13px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      font-weight: 750;
+    }
+
+    h2 {
+      margin: 0;
+      font-size: clamp(32px, 5vw, 58px);
+      line-height: 1.03;
+      letter-spacing: -0.055em;
+      font-weight: 760;
+    }
+
+    .section-copy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 16px;
+      line-height: 1.7;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .feature,
+    .panel {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--card);
+      padding: 24px;
+    }
+
+    .feature h3,
+    .panel h3 {
+      margin: 0 0 10px;
+      font-size: 18px;
+      letter-spacing: -0.02em;
+    }
+
+    .feature p,
+    .panel p,
+    .panel li {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.68;
+    }
+
+    .panel ul {
+      margin: 12px 0 0;
+      padding-left: 18px;
+    }
+
+    .showcase {
+      display: grid;
+      grid-template-columns: minmax(0, 0.88fr) minmax(0, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+
+    .stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    pre {
+      margin: 0;
+      overflow: auto;
+      border: 1px solid rgba(148, 163, 184, 0.28);
+      border-radius: var(--radius);
+      background: var(--code);
+      color: #e5edf7;
+      padding: 22px;
+      font-size: 13px;
+      line-height: 1.65;
+    }
+
+    .steps {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 14px;
+      counter-reset: step;
+    }
+
+    .step {
+      counter-increment: step;
+      position: relative;
+      min-height: 168px;
+      padding: 24px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: #fff;
+    }
+
+    .step::before {
+      content: counter(step);
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      margin-bottom: 18px;
+      border-radius: 999px;
+      background: var(--fg);
+      color: #fff;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .step h3 {
+      margin: 0 0 8px;
+      font-size: 16px;
+    }
+
+    .step p {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.62;
+    }
+
+    .download {
+      background: #0b1120;
+      color: #e5edf7;
+      border-top: 0;
+    }
+
+    .download .section-copy,
+    .download .label {
+      color: #94a3b8;
+    }
+
+    .download .button.primary {
+      background: #2dd4bf;
+      color: #042f2e;
+    }
+
+    .download .button.secondary {
+      background: rgba(255, 255, 255, 0.06);
+      color: #e5edf7;
+      border-color: rgba(255, 255, 255, 0.18);
+    }
+
+    .footer {
+      padding: 34px 0;
+      color: var(--muted);
+      border-top: 1px solid var(--line);
+      font-size: 13px;
+    }
+
+    .footer-inner {
+      width: min(var(--container), calc(100vw - 32px));
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      gap: 20px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 900px) {
+      .nav-links {
+        display: none;
+      }
+
+      .hero {
+        padding: 62px 0 56px;
+      }
+
+      .hero-grid,
+      .section-head,
+      .showcase {
+        grid-template-columns: 1fr;
+      }
+
+      .grid,
+      .steps {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <nav class="nav">
+    <div class="nav-inner">
+      <a class="brand" href="#top">
+        <img src="./shelfylogo.png" alt="Shelfy logo">
+        Shelfy
+      </a>
+      <div class="nav-links">
+        <a href="#features">能力</a>
+        <a href="#orden">规则</a>
+        <a href="#archive">压缩包</a>
+        <a href="#download">下载</a>
+      </div>
+    </div>
+  </nav>
+
+  <main id="top">
+    <section class="hero">
+      <div class="container hero-grid">
+        <div>
+          <p class="eyebrow">本地优先 · 不上传文件 · 可审计执行</p>
+          <h1>把杂乱文件夹整理成可维护的工作流。</h1>
+          <p class="hero-copy">
+            Shelfy 是桌面端文件自动化工具。它可以整理下载目录、备份文件夹、定时执行规则、按文本内容识别文件，也可以自动解压和压缩归档文件。
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#download">下载 Shelfy</a>
+            <a class="button secondary" href="https://github.com/hsr88/shelfy">查看源码</a>
+          </div>
+        </div>
+
+        <div class="hero-card" aria-label="Shelfy app preview">
+          <div class="window-bar">
+            <span class="dot"></span>
+            <span class="dot"></span>
+            <span class="dot"></span>
+          </div>
+          <div class="app-preview">
+            <div class="task">
+              <div class="task-icon">1</div>
+              <div>
+                <p class="task-title">备份 PDF 文档</p>
+                <p class="task-meta">~/Downloads → ~/Documents/Shelfy Backups/PDF</p>
+              </div>
+              <span class="pill">copy</span>
+            </div>
+            <div class="task">
+              <div class="task-icon">2</div>
+              <div>
+                <p class="task-title">识别代码里的 TODO</p>
+                <p class="task-meta">filecontent: TODO|FIXME</p>
+              </div>
+              <span class="pill">match</span>
+            </div>
+            <div class="task">
+              <div class="task-icon">3</div>
+              <div>
+                <p class="task-title">自动解压压缩包</p>
+                <p class="task-meta">zip / 7z / rar + 密码本</p>
+              </div>
+              <span class="pill">extract</span>
+            </div>
+            <pre><code>rules:
+  - name: 自动解压下载压缩包
+    locations: [~/Downloads]
+    filters:
+      - extension: [zip, 7z, rar]
+    actions:
+      - extract:
+          dest: ~/Downloads/Extracted/
+          format: auto
+          delete_original: true</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="features">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="label">核心能力</p>
+            <h2>不是“清理软件”，而是文件规则引擎。</h2>
+          </div>
+          <p class="section-copy">
+            Shelfy 保持简单入口：托盘、设置页、快捷任务列表。复杂规则交给 Orden 引擎，执行结果有日志，运行前可以先模拟。
+          </p>
+        </div>
+        <div class="grid">
+          <article class="feature">
+            <h3>整理文件</h3>
+            <p>按扩展名、文件名、正则、大小、时间、哈希、重复文件、MIME、EXIF 等条件筛选并移动、复制或重命名。</p>
+          </article>
+          <article class="feature">
+            <h3>备份文件夹</h3>
+            <p>把文档、项目或下载内容复制到一个或多个目标位置。保留原件，适合轻量备份和归档。</p>
+          </article>
+          <article class="feature">
+            <h3>定时执行</h3>
+            <p>支持固定时间和 cron 表达式，后台 keepalive 与调度日志帮助你确认任务是否执行。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section" id="orden">
+      <div class="container showcase">
+        <div class="stack">
+          <div class="panel">
+            <h3>可视化规则，也可以直接写 YAML。</h3>
+            <p>常见任务用 Visual 模式配置；需要精细控制时切到 Source 模式，直接编辑 Orden YAML。</p>
+          </div>
+          <div class="panel">
+            <h3>运行前先模拟。</h3>
+            <p>Check / Simulate / Run 分离。模拟结果会列出命中的文件和即将执行的动作，降低误操作风险。</p>
+          </div>
+        </div>
+        <pre><code>rules:
+  - name: 备份 PDF 文档
+    locations:
+      - ~/Downloads
+    subfolders: true
+    filters:
+      - extension: [pdf]
+    actions:
+      - copy: ~/Documents/Shelfy Backups/PDF/</code></pre>
+      </div>
+    </section>
+
+    <section class="section" id="archive">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="label">压缩包自动化</p>
+            <h2>下载完压缩包，规则可以接着处理。</h2>
+          </div>
+          <p class="section-copy">
+            Orden 支持 extract / compress 动作。ZIP 内置处理；7z 和 rar 可通过系统 7-Zip 处理。支持密码列表、默认压缩密码和成功后删除原文件。
+          </p>
+        </div>
+        <div class="grid">
+          <article class="feature">
+            <h3>自动解压</h3>
+            <p>匹配 zip、7z、rar 后解压到指定目录。可配置多个密码并自动尝试。</p>
+          </article>
+          <article class="feature">
+            <h3>自动压缩</h3>
+            <p>把文件或文件夹压缩成 zip / 7z。ZIP 支持 AES-256 密码加密。</p>
+          </article>
+          <article class="feature">
+            <h3>执行日志</h3>
+            <p>每个创建目录、解压文件、跳过冲突、删除原包的动作都会进入执行日志。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="label">文本内容识别</p>
+            <h2>不只看文件名，也能看文件内容。</h2>
+          </div>
+          <p class="section-copy">
+            filecontent 过滤器支持 txt、markdown、日志、代码、配置文件、Dockerfile、Makefile、PDF 和 DOCX。适合识别发票号、关键字、TODO、项目配置或日志内容。
+          </p>
+        </div>
+        <pre><code>rules:
+  - name: 收集包含 TODO 的代码
+    locations:
+      - ~/Downloads
+    subfolders: true
+    filters:
+      - filecontent: "TODO|FIXME"
+    actions:
+      - move: ~/Documents/Code Notes/</code></pre>
+      </div>
+    </section>
+
+    <section class="section">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="label">使用方式</p>
+            <h2>从简单规则开始，逐步加自动化。</h2>
+          </div>
+          <p class="section-copy">不需要一次配置完所有东西。先选择一个文件夹，再添加规则，模拟确认后再运行。</p>
+        </div>
+        <div class="steps">
+          <article class="step">
+            <h3>选择文件夹</h3>
+            <p>添加 Downloads 或任何需要整理、备份、监控的目录。</p>
+          </article>
+          <article class="step">
+            <h3>配置规则</h3>
+            <p>用简单规则或 Orden Visual 模式描述筛选条件和动作。</p>
+          </article>
+          <article class="step">
+            <h3>先模拟</h3>
+            <p>查看命中文件、目标路径和动作日志，确认无误后再执行。</p>
+          </article>
+          <article class="step">
+            <h3>定时运行</h3>
+            <p>需要自动化时启用调度，让规则按时间或 cron 执行。</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section class="section download" id="download">
+      <div class="container">
+        <div class="section-head">
+          <div>
+            <p class="label">下载</p>
+            <h2>安装后在托盘中运行。</h2>
+          </div>
+          <p class="section-copy">
+            当前提供 Windows 安装包和便携版。Linux / macOS 构建可在下载目录中查看；也可以从源码构建。
+          </p>
+        </div>
+        <div class="hero-actions">
+          <a class="button primary" href="./download/Shelfy_0.1.3_x64-setup.exe">Windows 安装包</a>
+          <a class="button secondary" href="./download/Shelfy_0.1.3_x64-portable.exe">Windows 便携版</a>
+          <a class="button secondary" href="./download/linux/Shelfy_0.1.3_amd64.AppImage">Linux AppImage</a>
+          <a class="button secondary" href="https://github.com/hsr88/shelfy">源码</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <div class="footer-inner">
+      <span>Shelfy</span>
+      <span>本地优先的文件整理与自动化工具。</span>
+    </div>
+  </footer>
+</body>
+
+</html>

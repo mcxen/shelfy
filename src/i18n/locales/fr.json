@@ -1,0 +1,128 @@
+{
+  "app": {
+    "name": "Shelfy",
+    "tagline": "Téléchargez, oubliez – il se souvient",
+    "loading": "Shelfy..."
+  },
+  "popup": {
+    "title": "Shelfy",
+    "cleanNow": "Nettoyer maintenant",
+    "openDownloads": "Ouvrir Téléchargements",
+    "recentActions": "Actions récentes",
+    "noActions": "Aucune action",
+    "weeklyStats": "Cette semaine",
+    "undo": "Annuler",
+    "settings": "Paramètres",
+    "quit": "Quitter",
+    "organized": "Organisé : {{file}}",
+    "openFolder": "Cliquer pour ouvrir → {{folder}}",
+    "pendingFiles": "{{count}} fichiers en attente",
+    "cleanManual": "Nettoyer maintenant"
+  },
+  "settings": {
+    "title": "Paramètres Shelfy",
+    "folders": {
+      "title": "Dossiers surveillés",
+      "add": "Ajouter un dossier",
+      "remove": "Supprimer",
+      "mode": "Mode",
+      "silent": "Silencieux",
+      "suggest": "Suggérer",
+      "placeholder": "C:/Users/.../Downloads",
+      "modeSilent": "Silencieux (auto)",
+      "modeManual": "Manuel (collecte uniquement)",
+      "modePaused": "En pause",
+      "modeDesc": "Choisissez comment Shelfy gère les fichiers dans ce dossier."
+    },
+    "rules": {
+      "title": "Règles",
+      "add": "Ajouter une règle",
+      "edit": "Modifier",
+      "delete": "Supprimer",
+      "name": "Nom",
+      "extensions": "Extensions",
+      "destination": "Destination",
+      "pattern": "Pattern",
+      "priority": "Priorité",
+      "action": "Action",
+      "enabled": "Activée",
+      "export": "Exporter les règles",
+      "import": "Importer les règles",
+      "exportSuccess": "Règles exportées",
+      "importSuccess": "{{count}} règles importées",
+      "importError": "Échec de l'importation des règles",
+      "exportError": "Échec de l'exportation des règles",
+      "replaceOnImport": "Remplacer les règles existantes (sinon ajouter)"
+    },
+    "history": {
+      "title": "Historique",
+      "clear": "Effacer l'historique",
+      "undo": "Annuler",
+      "undone": "Annulé",
+      "empty": "Aucun historique",
+      "revertAll": "Tout annuler",
+      "revertAllDisabled": "Aucune action à annuler"
+    },
+    "general": {
+      "title": "Général",
+      "language": "Langue",
+      "theme": "Thème",
+      "themeSystem": "Système",
+      "themeLight": "Clair",
+      "themeDark": "Sombre",
+      "telemetry": "Activer la télémétrie",
+      "startWithSystem": "Démarrer avec le système",
+      "gracePeriod": "Délai de grâce",
+      "gracePeriodDesc": "Temps d'attente avant de déplacer un fichier après sa dernière modification. 0 = instantané.",
+      "checkFileLock": "Vérifier le verrouillage",
+      "checkFileLockDesc": "Ignorer les fichiers actuellement utilisés par un autre processus",
+      "gracePeriodSeconds": "Secondes",
+      "gracePeriodMinutes": "Minutes",
+      "gracePeriodHours": "Heures",
+      "gracePeriodCustom": "Personnalisé",
+      "gracePeriodMaxError": "La période de grâce ne peut pas dépasser 7 jours"
+    },
+    "ignore": {
+      "title": "Ignorer",
+      "rulesTitle": "Règles d'exclusion",
+      "description": "Choisissez un dossier surveillé et définissez des motifs pour les fichiers que Shelfy doit ignorer. Les motifs sont enregistrés dans un fichier .shelfyignore dans ce dossier.",
+      "folder": "Dossier",
+      "selectFolder": "Sélectionner un dossier...",
+      "patterns": "Motifs",
+      "noRules": "Aucune règle d'exclusion pour l'instant. Ajoutez-en une ci-dessous.",
+      "placeholder": "ex. *.tmp ou node_modules/",
+      "add": "Ajouter",
+      "tips": "Astuces :",
+      "save": "Enregistrer .shelfyignore",
+      "saved": "Enregistré !",
+      "remove": "Supprimer"
+    },
+    "about": {
+      "title": "À propos",
+      "tagline": "Vos téléchargements, domptés.",
+      "description": "Shelfy est un organiseur de fichiers silencieux et élégant qui vit dans votre barre d'état système et garde automatiquement votre dossier Téléchargements (et tout autre dossier) bien rangé. Il fonctionne tranquillement en arrière-plan, surveille les dossiers sélectionnés et déplace, renomme ou trie les fichiers selon des règles personnalisables.",
+      "checkUpdates": "Vérifier les mises à jour",
+      "support": "Soutenir Shelfy sur Ko-fi",
+      "supportDesc": "Votre soutien permet d'améliorer Shelfy. Merci ! 🙏",
+      "builtBy": "Conçu avec soin par hsr"
+    },
+    "scheduler": {
+      "title": "Planificateur",
+      "enable": "Activer le nettoyage planifié",
+      "timesPerDay": "Fois par jour",
+      "time": "Heure {{number}}",
+      "desc": "Lancez le nettoyage automatiquement aux heures planifiées.",
+      "once": "Une fois par jour",
+      "twice": "Deux fois par jour",
+      "thrice": "3 fois par jour",
+      "fourTimes": "4 fois par jour"
+    }
+  },
+  "notifications": {
+    "cleaned": "{{count}} fichier(s) organisé(s)"
+  },
+  "common": {
+    "cancel": "Annuler",
+    "off": "Désactivé"
+  }
+}

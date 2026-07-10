@@ -1,0 +1,128 @@
+{
+  "app": {
+    "name": "Shelfy",
+    "tagline": "Pobierasz, zapominasz – on pamięta",
+    "loading": "Shelfy..."
+  },
+  "popup": {
+    "title": "Shelfy",
+    "cleanNow": "Posprzątaj teraz",
+    "openDownloads": "Otwórz Pobrane",
+    "recentActions": "Ostatnie akcje",
+    "noActions": "Brak akcji",
+    "weeklyStats": "W tym tygodniu",
+    "undo": "Cofnij",
+    "settings": "Ustawienia",
+    "quit": "Zamknij",
+    "organized": "Uporządkowano: {{file}}",
+    "openFolder": "Kliknij, aby otworzyć → {{folder}}",
+    "pendingFiles": "{{count}} plików oczekuje",
+    "cleanManual": "Posprzątaj teraz"
+  },
+  "settings": {
+    "title": "Ustawienia Shelfy",
+    "folders": {
+      "title": "Monitorowane foldery",
+      "add": "Dodaj folder",
+      "remove": "Usuń",
+      "mode": "Tryb",
+      "silent": "Cichy",
+      "suggest": "Podpowiadacz",
+      "placeholder": "C:/Użytkownicy/.../Pobrane",
+      "modeSilent": "Cichy (auto)",
+      "modeManual": "Ręczny (tylko zbieraj)",
+      "modePaused": "Wstrzymany",
+      "modeDesc": "Wybierz, jak Shelfy ma obsługiwać pliki w tym folderze."
+    },
+    "rules": {
+      "title": "Reguły",
+      "add": "Dodaj regułę",
+      "edit": "Edytuj",
+      "delete": "Usuń",
+      "name": "Nazwa",
+      "extensions": "Rozszerzenia",
+      "destination": "Cel",
+      "pattern": "Wzorzec (regex)",
+      "priority": "Priorytet",
+      "action": "Akcja",
+      "enabled": "Włączona",
+      "export": "Eksportuj reguły",
+      "import": "Importuj reguły",
+      "exportSuccess": "Wyeksportowano reguły",
+      "importSuccess": "Zaimportowano {{count}} reguł",
+      "importError": "Nie udało się zaimportować reguł",
+      "exportError": "Nie udało się wyeksportować reguł",
+      "replaceOnImport": "Zastąp istniejące reguły (w przeciwnym razie dopisz)"
+    },
+    "history": {
+      "title": "Historia",
+      "clear": "Wyczyść historię",
+      "undo": "Cofnij",
+      "undone": "Cofnięto",
+      "empty": "Brak historii",
+      "revertAll": "Cofnij wszystko",
+      "revertAllDisabled": "Brak akcji do cofnięcia"
+    },
+    "general": {
+      "title": "Ogólne",
+      "language": "Język",
+      "theme": "Motyw",
+      "themeSystem": "Systemowy",
+      "themeLight": "Jasny",
+      "themeDark": "Ciemny",
+      "telemetry": "Włącz telemetrię",
+      "startWithSystem": "Uruchamiaj z systemem",
+      "gracePeriod": "Okres karencji",
+      "gracePeriodDesc": "Czas oczekiwania przed przeniesieniem pliku po ostatniej modyfikacji. 0 = natychmiast.",
+      "checkFileLock": "Sprawdź blokadę pliku",
+      "checkFileLockDesc": "Pomiń pliki aktualnie używane przez inny proces",
+      "gracePeriodSeconds": "Sekundy",
+      "gracePeriodMinutes": "Minuty",
+      "gracePeriodHours": "Godziny",
+      "gracePeriodCustom": "Niestandardowy",
+      "gracePeriodMaxError": "Okres karencji nie może przekraczać 7 dni"
+    },
+    "ignore": {
+      "title": "Ignoruj",
+      "rulesTitle": "Reguły ignorowania",
+      "description": "Wybierz monitorowany folder i ustaw wzorce dla plików, które Shelfy powinien pominąć. Wzorce są zapisywane jako plik .shelfyignore w tym folderze.",
+      "folder": "Folder",
+      "selectFolder": "Wybierz folder...",
+      "patterns": "Wzorce",
+      "noRules": "Brak reguł ignorowania. Dodaj jedną poniżej.",
+      "placeholder": "np. *.tmp lub node_modules/",
+      "add": "Dodaj",
+      "tips": "Wskazówki:",
+      "save": "Zapisz .shelfyignore",
+      "saved": "Zapisano!",
+      "remove": "Usuń"
+    },
+    "about": {
+      "title": "O aplikacji",
+      "tagline": "Twoje pobrane, pod kontrolą.",
+      "description": "Shelfy to cichy, elegancki organizer plików, który mieszka w zasobniku systemowym i automatycznie utrzymuje porządek w folderze Pobrane (i dowolnym innym folderze). Działa cicho w tle, monitoruje wybrane foldery i przenosi, zmienia nazwy lub sortuje pliki na podstawie konfigurowalnych reguł.",
+      "checkUpdates": "Sprawdź aktualizacje",
+      "support": "Wesprzyj Shelfy na Ko-fi",
+      "supportDesc": "Twoje wsparcie pomaga ulepszać Shelfy. Dziękuję! 🙏",
+      "builtBy": "Stworzone z pasją przez hsr"
+    },
+    "scheduler": {
+      "title": "Harmonogram",
+      "enable": "Włącz planowe sprzątanie",
+      "timesPerDay": "Razy dziennie",
+      "time": "Godzina {{number}}",
+      "desc": "Automatycznie uruchamiaj sprzątanie o zaplanowanych porach.",
+      "once": "Raz dziennie",
+      "twice": "Dwa razy dziennie",
+      "thrice": "3 razy dziennie",
+      "fourTimes": "4 razy dziennie"
+    }
+  },
+  "notifications": {
+    "cleaned": "Uporządkowano {{count}} plik(i)"
+  },
+  "common": {
+    "cancel": "Anuluj",
+    "off": "WYŁ."
+  }
+}

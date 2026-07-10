@@ -1,0 +1,128 @@
+{
+  "app": {
+    "name": "Shelfy",
+    "tagline": "ダウンロードして、あとは忘れよう – Shelfyが覚えています",
+    "loading": "Shelfy..."
+  },
+  "popup": {
+    "title": "Shelfy",
+    "cleanNow": "今すぐ整理",
+    "openDownloads": "ダウンロードフォルダを開く",
+    "recentActions": "最近のアクション",
+    "noActions": "まだアクションがありません",
+    "weeklyStats": "今週",
+    "undo": "元に戻す",
+    "settings": "設定",
+    "quit": "終了",
+    "organized": "整理済み: {{file}}",
+    "openFolder": "クリックして開く → {{folder}}",
+    "pendingFiles": "{{count}}件のファイル待機中",
+    "cleanManual": "今すぐ整理"
+  },
+  "settings": {
+    "title": "Shelfyの設定",
+    "folders": {
+      "title": "監視対象フォルダ",
+      "add": "フォルダを追加",
+      "remove": "削除",
+      "mode": "モード",
+      "silent": "サイレント",
+      "suggest": "提案",
+      "placeholder": "C:/Users/.../Downloads",
+      "modeSilent": "サイレント（自動）",
+      "modeManual": "手動（収集のみ）",
+      "modePaused": "一時停止",
+      "modeDesc": "このフォルダのファイルを Shelfy がどう扱うか選んでください。"
+    },
+    "rules": {
+      "title": "ルール",
+      "add": "ルールを追加",
+      "edit": "編集",
+      "delete": "削除",
+      "name": "名前",
+      "extensions": "拡張子",
+      "destination": "移動先",
+      "pattern": "パターン",
+      "priority": "優先順位",
+      "action": "アクション",
+      "enabled": "有効",
+      "export": "ルールをエクスポート",
+      "import": "ルールをインポート",
+      "exportSuccess": "ルールをエクスポートしました",
+      "importSuccess": "{{count}}件のルールをインポートしました",
+      "importError": "ルールのインポートに失敗しました",
+      "exportError": "ルールのエクスポートに失敗しました",
+      "replaceOnImport": "既存のルールを置き換える（無効の場合は追加）"
+    },
+    "history": {
+      "title": "履歴",
+      "clear": "履歴を削除",
+      "undo": "取り消す",
+      "undone": "取り消し済み",
+      "empty": "履歴がありません",
+      "revertAll": "すべて取り消す",
+      "revertAllDisabled": "元に戻すアクションがありません"
+    },
+    "general": {
+      "title": "一般",
+      "language": "言語",
+      "theme": "テーマ",
+      "themeSystem": "システム",
+      "themeLight": "ライト",
+      "themeDark": "ダーク",
+      "telemetry": "テレメトリを有効化",
+      "startWithSystem": "システムと同時に起動",
+      "gracePeriod": "猶予時間",
+      "gracePeriodDesc": "ファイルが最後に変更されてから移動するまでの待機時間。0にするとすぐに移動します。",
+      "checkFileLock": "ファイルロックの確認",
+      "checkFileLockDesc": "他のプロセスで使用中のファイルをスキップ",
+      "gracePeriodSeconds": "秒",
+      "gracePeriodMinutes": "分",
+      "gracePeriodHours": "時間",
+      "gracePeriodCustom": "カスタム",
+      "gracePeriodMaxError": "猶予期間は7日を超えることはできません"
+    },
+    "ignore": {
+      "title": "除外",
+      "rulesTitle": "除外ルール",
+      "description": "監視対象フォルダを選択して、Shelfyがスキップするファイルのパターンを設定します。パターンは .shelfyignoreファイルとしてフォルダ内に保存されます。",
+      "folder": "フォルダ",
+      "selectFolder": "フォルダを選択...",
+      "patterns": "パターン",
+      "noRules": "まだルールはありません。以下に追加してください。",
+      "placeholder": "例: *.tmp や node_modules/",
+      "add": "追加",
+      "tips": "ヒント:",
+      "save": ".shelfyignoreを保存",
+      "saved": "保存しました!",
+      "remove": "削除"
+    },
+    "about": {
+      "title": "について",
+      "tagline": "ダウンロードを、思い通りに。",
+      "description": "Shelfyは、システムトレイに常駐する静かで洗練されたファイルオーガナイザーで、ダウンロードフォルダ(およびその他のフォルダ)を自動で整理します。バックグラウンドで静かに動作し、カスタマイズ可能なルールに基づきファイルを移動、名前の変更、または並べ替えます。",
+      "checkUpdates": "アップデートを確認",
+      "support": "Ko-fiでShelfyを支援する",
+      "supportDesc": "皆様のご支援により、Shelfyは日々進化し続けています。支援していただき、ありがとうございます！ 🙏",
+      "builtBy": "hsrが心を込めて作りました"
+    },
+    "scheduler": {
+      "title": "スケジューラ",
+      "enable": "定期クリーンを有効化",
+      "timesPerDay": "1日あたりの回数",
+      "time": "時刻 {{number}}",
+      "desc": "指定した時刻に自動で「今すぐ整理」を実行します。",
+      "once": "1日1回",
+      "twice": "1日2回",
+      "thrice": "1日3回",
+      "fourTimes": "1日4回"
+    }
+  },
+  "notifications": {
+    "cleaned": "{{count}}個のファイルを整理しました"
+  },
+  "common": {
+    "cancel": "キャンセル",
+    "off": "オフ"
+  }
+}
