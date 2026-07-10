@@ -150,11 +150,15 @@ pub fn show_settings_window(app: &AppHandle) {
         .title(i18n.get("settings_title"))
         .inner_size(900.0, 650.0)
         .min_inner_size(700.0, 500.0)
-        .transparent(true)
-        .title_bar_style(tauri::TitleBarStyle::Overlay)
-        .hidden_title(true)
-        .traffic_light_position(tauri::LogicalPosition::new(18.0, 18.0))
-        .build();
+        .transparent(true);
+
+        #[cfg(target_os = "macos")]
+        let window = window
+            .title_bar_style(tauri::TitleBarStyle::Overlay)
+            .hidden_title(true)
+            .traffic_light_position(tauri::LogicalPosition::new(18.0, 18.0));
+
+        let window = window.build();
 
         if let Ok(win) = window {
             let _ = win.show();
