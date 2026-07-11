@@ -104,14 +104,14 @@ export function GeneralTab({
 
   return (
     <div className="w-full space-y-4">
-      <Card className="grid gap-x-6 gap-y-3 p-3.5 md:grid-cols-2">
+      <Card className="grid gap-x-4 gap-y-3 p-3.5 md:grid-cols-[18rem_18rem] lg:grid-cols-[20rem_20rem]">
         <div className="md:col-span-2">
           <h2 className="text-lg font-semibold">{t("settings.general.title")}</h2>
         </div>
         <div>
           <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.general.language")}</Label>
           <Select value={settings?.language || "en"} onValueChange={handleChangeLanguage}>
-            <SelectTrigger className="max-w-sm">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -129,7 +129,7 @@ export function GeneralTab({
         <div>
           <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.general.theme")}</Label>
           <Select value={settings?.theme || "system"} onValueChange={(value) => settings && saveSettings({ ...settings, theme: value })}>
-            <SelectTrigger className="max-w-sm">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -149,8 +149,8 @@ export function GeneralTab({
             <Label className="text-sm text-muted-foreground">{t("settings.general.gracePeriod")}</Label>
             <span className="text-xs text-muted-foreground">{formatDuration(currentGraceSeconds)}</span>
           </div>
-          <div className="max-w-3xl"><Slider min={0} max={graceSteps.length - 1} step={1} value={[sliderIndex]} onValueChange={([value]) => handleGraceSliderChange(value)} /></div>
-          <div className="grid max-w-sm gap-2 grid-cols-[minmax(0,1fr)_7.5rem]">
+          <Slider min={0} max={graceSteps.length - 1} step={1} value={[sliderIndex]} onValueChange={([value]) => handleGraceSliderChange(value)} />
+          <div className="grid max-w-md grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
             <Input
               type="number"
               min={0}
@@ -197,7 +197,7 @@ export function GeneralTab({
           <p className="text-xs text-muted-foreground">{t("settings.scheduler.desc")}</p>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
+        <div className="flex max-w-3xl items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
           <Label className="text-sm text-muted-foreground">{t("settings.scheduler.enable")}</Label>
           <Switch checked={localSchedule.schedule_enabled} onCheckedChange={(checked) => handleScheduleChange({ schedule_enabled: checked })} />
         </div>
@@ -205,7 +205,7 @@ export function GeneralTab({
         <div>
           <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.scheduler.timesPerDay")}</Label>
           <Select value={String(localSchedule.schedule_times_per_day)} onValueChange={(value) => handleScheduleChange({ schedule_times_per_day: parseInt(value, 10) })}>
-            <SelectTrigger className="max-w-sm">
+            <SelectTrigger className="w-full sm:w-72">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -233,7 +233,7 @@ export function GeneralTab({
           })}
         </div>
 
-        <section className="space-y-3 rounded-lg border border-border/70 bg-muted/15 p-3">
+        <section className="max-w-4xl space-y-3 rounded-lg border border-border/70 bg-muted/15 p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <Label className="text-sm text-muted-foreground">{t("settings.scheduler.cronEnable")}</Label>
@@ -258,7 +258,7 @@ export function GeneralTab({
           </div>
         </section>
 
-        <section className="space-y-3 rounded-lg border border-border/70 bg-muted/15 p-3">
+        <section className="max-w-4xl space-y-3 rounded-lg border border-border/70 bg-muted/15 p-3">
           <div className="flex items-center justify-between gap-3">
             <div>
               <Label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -344,7 +344,7 @@ export function GeneralTab({
           <p className="text-xs text-muted-foreground">{t("settings.mcp.desc")}</p>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border border-border/70 bg-muted/20 p-3">
+        <div className="flex max-w-4xl items-center justify-between rounded-lg border border-border/70 bg-muted/20 p-3">
           <div>
             <Label className="text-sm text-muted-foreground">{t("settings.mcp.enable")}</Label>
             <p className="text-xs text-muted-foreground">{t("settings.mcp.enableDesc")}</p>
@@ -352,7 +352,7 @@ export function GeneralTab({
           <Switch checked={localMcp.mcp_enabled} onCheckedChange={(checked) => setLocalMcp({ ...localMcp, mcp_enabled: checked })} />
         </div>
 
-        <div className="grid gap-3 md:grid-cols-2">
+        <div className="grid max-w-4xl gap-3 md:grid-cols-2">
           <div>
             <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.mcp.serverName")}</Label>
             <Input value={localMcp.mcp_server_name} onChange={(e) => setLocalMcp({ ...localMcp, mcp_server_name: e.target.value })} placeholder="shelfy" />
@@ -360,7 +360,7 @@ export function GeneralTab({
           <div>
             <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.mcp.transport")}</Label>
             <Select value={localMcp.mcp_transport} onValueChange={(value) => setLocalMcp({ ...localMcp, mcp_transport: value })}>
-              <SelectTrigger>
+              <SelectTrigger className="w-full sm:w-72">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -372,7 +372,7 @@ export function GeneralTab({
         </div>
 
         {localMcp.mcp_transport === "http" ? (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid max-w-4xl gap-3 md:grid-cols-2">
             <div>
               <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.mcp.httpUrl")}</Label>
               <Input value={localMcp.mcp_http_url || ""} onChange={(e) => setLocalMcp({ ...localMcp, mcp_http_url: e.target.value })} placeholder="http://127.0.0.1:8765/mcp" />
@@ -383,7 +383,7 @@ export function GeneralTab({
             </div>
           </div>
         ) : (
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid max-w-4xl gap-3 md:grid-cols-2">
             <div>
               <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.mcp.command")}</Label>
               <Input value={localMcp.mcp_command || ""} onChange={(e) => setLocalMcp({ ...localMcp, mcp_command: e.target.value })} placeholder={t("settings.mcp.commandPlaceholder")} />

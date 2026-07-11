@@ -266,6 +266,18 @@ MCP tools：
 - Popup 失焦后停止轮询和前端事件刷新；显示时以 15 秒刷新 pending files、60 秒刷新 Orden quick tasks，重新获得焦点时立即同步。
 - tray 左键打开 Popup、双击打开 Settings；右键菜单提供监控状态、主面板、立即整理、Orden 自动化、监控目录、设置和退出。耗时整理操作在线程中执行，避免阻塞 tray 事件循环。
 
+## 6.7 Orden 可视化交互决策
+
+Orden 的 GUI 不把 YAML 字段逐项平铺，而使用 `文件来源 → 中间条件 → 执行动作` 的小卡片流程。该模型保持内核语义不变：来源对应 `locations`，条件卡对应 `filters` 与 `filter_mode`，动作卡顺序对应 `actions` 的真实执行顺序。
+
+- 多来源以可左右切换的来源卡片展示；条件和动作以可横向浏览的动态卡片组展示。
+- 卡片只承担识别和摘要，选中后才显示完整 YAML 参数检查器，避免复杂流程同时展开所有低层字段。
+- 添加步骤使用带说明和默认参数的快捷卡片库；危险或会改变文件状态的动作显式提示。
+- 新建配置和使用模版后默认进入 Visual 模式；Source/YAML 继续作为复杂配置的高级入口。
+- 模版中心按整理目标组织，详情复用来源/条件/动作流程摘要，并标示保留原件、修改文件或需要重点检查的影响等级。
+
+完整交互约定见 `docs/ORDEN_FLOW_DESIGN.md`。
+
 ### 6.3 History / Undo 约束
 
 Shelfy 现有 History/Undo 以“从 destination rename 回 source”为核心模型，适合 `move` / `rename`。

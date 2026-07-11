@@ -178,7 +178,7 @@ export default function Settings() {
   const [ordenTemplates, setOrdenTemplates] = useState<OrdenTemplate[]>([]);
   const [ordenName, setOrdenName] = useState("main");
   const [ordenYaml, setOrdenYaml] = useState(DEFAULT_ORDEN_EXAMPLE);
-  const [ordenEditorMode, setOrdenEditorMode] = useState<OrdenEditorMode>("source");
+  const [ordenEditorMode, setOrdenEditorMode] = useState<OrdenEditorMode>("visual");
   const [ordenSourceExpanded, setOrdenSourceExpanded] = useState(false);
   const [ordenView, setOrdenView] = useState<OrdenView>("list");
   const [ordenPreviewError, setOrdenPreviewError] = useState<string | null>(null);
@@ -219,6 +219,22 @@ export default function Settings() {
       unlisten.then((dispose) => dispose());
     };
   }, []);
+
+  useEffect(() => {
+    if (!folderAccessError?.path) return;
+
+    const refreshAccess = async () => {
+      try {
+        const access = await validateFolderAccess(folderAccessError.path);
+        if (access.readable) setFolderAccessError(null);
+      } catch {
+        // Keep the existing error visible until the path can be verified again.
+      }
+    };
+
+    window.addEventListener("focus", refreshAccess);
+    return () => window.removeEventListener("focus", refreshAccess);
+  }, [folderAccessError?.path, validateFolderAccess]);
 
   const loadOrdenConfigs = async (preferredName?: string) => {
     const names = await ordenList();
@@ -850,7 +866,7 @@ export default function Settings() {
     setOrdenYaml(template.yaml);
     setOrdenVisual(visual.rules.length > 0 ? visual : defaultOrdenVisualConfig());
     setOrdenEditorMode("visual");
-    setOrdenView("list");
+    setOrdenView("editor");
     await loadOrdenConfigs(configName);
     setTab("advanced");
     setOrdenToast({ message: t("settings.orden.templates.addedNotice"), type: "success" });
@@ -1159,7 +1175,7 @@ export default function Settings() {
       {/* Content */}
       <main className="relative z-10 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-3 [scrollbar-gutter:stable]">
         <div className="mx-auto w-full max-w-[1280px]">
-        {isMacOS && (tab === "rules" || tab === "advanced") && (
+        {isMacOS && folderAccessError && (tab === "rules" || tab === "advanced") && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-card/75 px-3 py-2 shadow-sm">
             <div className="flex min-w-0 items-center gap-2.5">
               <ShieldAlert size={16} className={folderAccessError ? "shrink-0 text-destructive" : "shrink-0 text-muted-foreground"} />

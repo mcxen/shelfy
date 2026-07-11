@@ -178,6 +178,9 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] 单条 Orden 配置支持行内试跑、配置预览和分组更多菜单；可视化规则按基础信息、来源筛选、执行动作 Card 归组
 - [x] Settings 增加 MCP 开关、stdio/HTTP 快捷配置和客户端配置片段
 - [x] 新增 Orden 模版中心 Tab：系统模版浏览、详情预览、加号快速生成配置；系统/用户模版持久化到本地 `orden/templates/` YAML 文件并支持编辑另存
+- [x] 修复 Orden 模板渲染按字节转换 Unicode 字符导致中文文件/目录名乱码；补多字节文本和环境变量回归测试
+- [x] Orden Visual 重构为小卡片流程：多来源左右切换、条件/动作动态卡片轨道、选中卡片参数检查器和快捷卡片库
+- [x] 模版中心重构为目标分类、流程摘要、文件影响提示和“使用后直接进入 Visual 编辑”的渐进式入口
 - [x] 新增 `shelfy --mcp` / `shelfy --cli mcp` stdio MCP 服务
 - [x] MCP 写工具由独立 `mcp_allow_write` 控制
 - [ ] Visual 模式保留复杂 YAML 的 round-trip 注释/未知字段
@@ -199,6 +202,7 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] P0 菜单浮层：Menu Portal、碰撞检测与键盘焦点
 - [x] P0 模版中心筛选：系统模版/我的模版切换时同步详情选择
 - [x] P0 模版中心完善：另存后自动进入我的模版、修复卡片嵌套交互、同步内置模版更新并补测试
+- [x] P1 General 控件宽度：大窗口使用紧凑固定宽度，窄窗口保持自适应铺满
 - [ ] P0 Rules / Orden 响应式操作区：700px 与 900px 不裁切
 - [ ] P1 全局颜色与按钮尺寸：拉开 surface 层级，移除偏黄正文和品牌外渐变，建立 28/32px 按钮层级
 - [ ] P1 页面密度：收紧 Rules、General、Template、Orden、History 的 Card、表格、工具栏和空状态
@@ -220,13 +224,16 @@ Settings → Advanced 是当前图形入口，支持：
 - 暂无编译阻塞。`cargo test` 与前端 `npm run build` 已通过。
 - 品牌图标与主题替换已通过 `npm run build`、`cargo build`；Tray 资产哈希校验保持不变。
 - 剩余设计点：非 move/rename 的 orden 动作如何进入 Shelfy History/Undo 需要单独定义语义，避免 copy/delete/trash/shell 被现有“反向 rename”撤销逻辑误处理。
+- 已被旧版 Orden 模板写入磁盘的乱码文件名无法在不扫描和确认目标的情况下安全自动恢复；需要单独设计预览式修复工具。
 - UI 阶段 9 已开工；当前无阻塞，按 P0 → P1 → P2 推进。
+- Orden 卡片流程和新模版中心已通过 `npm run build`；真实 Tauri 窗口的 700/900/1280 截图验收仍待可用的桌面自动化环境完成。
 
 ## 下一步
 
-1. 完成阶段 9 的 Rules / Orden 响应式 P0 修复并验证 700px、900px 窗口
+1. 在真实 Tauri 窗口完成 Orden 卡片流程与模版中心的 700×500、900×650、1280×800 浅深色截图验收
 2. 完成主题、按钮和五个设置页面的 P1 密度修复
 3. 完成截图覆盖流程的 Tooltip、Dialog、标签与本地化 P2 修复
 4. 为 copy/delete/trash/shell 设计 History/Undo 策略，或显式标记为不可撤销事件
 5. 将 watcher/scheduler 的高级模式接入 orden 配置（当前 Settings/CLI/手动运行已接入）
 6. 增加端到端测试：保存配置 → sim → run → History/Undo
+7. 设计乱码路径恢复预览：仅识别可逆的旧版 UTF-8 字节 mojibake，用户确认后再重命名和修正 History

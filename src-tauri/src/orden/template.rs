@@ -12,20 +12,25 @@ use crate::orden::value::Value;
 pub fn render(template: &str, args: &Value) -> Result<String, String> {
     let mut out = String::with_capacity(template.len());
     let bytes = template.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        let c = bytes[i];
-        if c == b'{' {
+    let mut chars = template.char_indices().peekable();
+    while let Some((i, c)) = chars.next() {
+        if c == '{' {
             // find the matching close brace, respecting quotes inside the expression
             if let Some((expr, end)) = read_expression(bytes, i) {
                 let evaluated = eval_expression(expr.trim(), args)?;
                 out.push_str(&evaluated);
-                i = end + 1;
+                // advance the char iterator past the closing brace (byte index `end`)
+                while let Some(&(pos, _)) = chars.peek() {
+                    if pos <= end {
+                        chars.next();
+                    } else {
+                        break;
+                    }
+                }
                 continue;
             }
         }
-        out.push(c as char);
-        i += 1;
+        out.push(c);
     }
 
     // expand ~ and environment variables (like organize's render)
@@ -342,8 +347,9 @@ fn expand_env(s: &str) -> String {
                 continue;
             }
         }
-        out.push(bytes[i] as char);
-        i += 1;
+        let c = s[i..].chars().next().expect("valid UTF-8 character boundary");
+        out.push(c);
+        i += c.len_utf8();
     }
     out
 }
@@ -406,8 +412,25 @@ mod tests {
 
     #[test]
     fn test_env_expand() {
-        std::env::set_var("SHELFY_TEST_VAR", "world");
-        let v = render("hi $SHELFY_TEST_VAR!", &ctx()).unwrap();
+        std::env::set_var("SHELFY_TEST_ENV_ASCII", "world");
+        let v = render("hi $SHELFY_TEST_ENV_ASCII!", &ctx()).unwrap();
         assert_eq!(v, "hi world!");
+    }
+
+    #[test]
+    fn test_multibyte_literal_is_preserved() {
+        // Regression: an earlier byte-wise implementation cast each UTF-8 byte
+        // as char, mangling multi-byte characters into mojibake. Static
+        // literals (e.g. a Chinese destination folder in an orden template)
+        // must round-trip unchanged.
+        let v = render("移动到 ~/下载/{extension.lower()}/", &ctx()).unwrap();
+        assert_eq!(v, "移动到 ~/下载/pdf/");
+    }
+
+    #[test]
+    fn test_multibyte_env_value_preserved() {
+        std::env::set_var("SHELFY_TEST_ENV_UTF8", "下载");
+        let v = render("folder/$SHELFY_TEST_ENV_UTF8/file", &ctx()).unwrap();
+        assert_eq!(v, "folder/下载/file");
     }
 }
