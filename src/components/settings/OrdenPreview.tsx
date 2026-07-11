@@ -18,7 +18,7 @@ export function OrdenPreview({ ordenResult, ordenPreviewError, onBack }: OrdenPr
   const rows = useMemo(() => buildOrdenPreviewRows(ordenResult), [ordenResult]);
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">{t("settings.orden.title")}</h2>
@@ -30,7 +30,7 @@ export function OrdenPreview({ ordenResult, ordenPreviewError, onBack }: OrdenPr
         </Button>
       </div>
 
-      <Card className="p-4 space-y-3">
+      <Card className="space-y-2 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <Badge variant={ordenPreviewError || ordenResult?.errors ? "destructive" : "default"}>
             {t("settings.orden.successCount", { count: ordenResult?.success || 0 })}
@@ -43,25 +43,25 @@ export function OrdenPreview({ ordenResult, ordenPreviewError, onBack }: OrdenPr
           </Badge>
         </div>
         {ordenPreviewError && (
-          <div className="rounded-xl border border-destructive/20 bg-destructive/10 shadow-sm px-3 py-2 text-sm text-destructive">
+          <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {ordenPreviewError}
           </div>
         )}
       </Card>
 
-      <div className="grid gap-4 md:grid-cols-2">
-        <Card className="p-4 space-y-3">
+      <div className="grid gap-3 md:grid-cols-2">
+        <Card className="space-y-2 p-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">{t("settings.orden.previewSource")}</h3>
             <Badge variant="secondary">{rows.length}</Badge>
           </div>
-          <div className="max-h-[420px] overflow-auto rounded-xl border border-border bg-muted/30">
+          <div className="max-h-[420px] overflow-auto border-t border-border">
             {rows.length === 0 ? (
               <div className="px-3 py-2 text-xs text-muted-foreground">{t("settings.orden.noLogs")}</div>
             ) : (
               <div className="divide-y divide-border">
                 {rows.map((row) => (
-                  <div key={row.id} className="px-3 py-3 text-xs">
+                  <div key={row.id} className="px-3 py-2 text-xs">
                     <div className="font-medium text-foreground">{row.source}</div>
                     <div className="mt-1 flex items-center gap-2 text-muted-foreground">
                       <Badge variant={row.level === "error" ? "destructive" : "secondary"}>{row.action}</Badge>
@@ -74,14 +74,14 @@ export function OrdenPreview({ ordenResult, ordenPreviewError, onBack }: OrdenPr
           </div>
         </Card>
 
-        <Card className="p-4 space-y-3">
+        <Card className="space-y-2 p-3">
           <div className="flex items-center justify-between">
             <h3 className="text-sm font-semibold">{t("settings.orden.previewResult")}</h3>
             <Badge variant="secondary">
               {ordenResult?.simulate !== false ? t("settings.orden.simulated") : t("settings.orden.applied")}
             </Badge>
           </div>
-          <div className="max-h-[420px] overflow-auto rounded-xl border border-border bg-muted/30">
+          <div className="max-h-[420px] overflow-auto border-t border-border">
             {rows.length === 0 ? (
               <div className="px-3 py-2 text-xs text-muted-foreground">
                 {ordenPreviewError || t("settings.orden.noLogs")}
@@ -89,7 +89,7 @@ export function OrdenPreview({ ordenResult, ordenPreviewError, onBack }: OrdenPr
             ) : (
               <div className="divide-y divide-border">
                 {rows.map((row) => (
-                  <div key={`${row.id}-result`} className="px-3 py-3 text-xs">
+                  <div key={`${row.id}-result`} className="px-3 py-2 text-xs">
                     <div className="font-medium text-foreground">{row.destination || row.message}</div>
                     <div className="mt-1 text-muted-foreground">{row.message}</div>
                   </div>
@@ -101,15 +101,15 @@ export function OrdenPreview({ ordenResult, ordenPreviewError, onBack }: OrdenPr
       </div>
 
       {ordenResult && (
-        <Card className="p-4 space-y-3">
+        <Card className="space-y-2 p-3">
           <h3 className="text-sm font-semibold">{t("settings.orden.previewLogs")}</h3>
-          <div className="max-h-56 overflow-auto rounded-xl border border-border bg-muted/40">
+          <div className="max-h-56 overflow-auto border-t border-border">
             {ordenResult.logs.length === 0 ? (
               <div className="px-3 py-2 text-xs text-muted-foreground">{t("settings.orden.noLogs")}</div>
             ) : (
               <div className="divide-y divide-border">
                 {ordenResult.logs.map((log, idx) => (
-                  <div key={idx} className="grid gap-1 px-3 py-3 text-xs md:grid-cols-[2.5rem_5rem_7rem_minmax(0,1fr)]">
+                  <div key={idx} className="grid gap-1 px-3 py-2 text-xs md:grid-cols-[2.5rem_5rem_7rem_minmax(0,1fr)]">
                     <span className="text-muted-foreground">{idx + 1}</span>
                     <span className={log.level === "error" ? "text-destructive" : "text-muted-foreground"}>{log.level}</span>
                     <span className="text-muted-foreground">{log.sender} · #{log.rule_nr + 1}</span>

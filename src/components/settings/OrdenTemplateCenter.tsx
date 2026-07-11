@@ -352,16 +352,16 @@ export function OrdenTemplateCenter({
 
       <Card className="overflow-hidden border-primary/20">
         <div className="grid gap-0 min-[900px]:grid-cols-[15rem_minmax(0,1fr)]">
-          <div className="border-b border-border bg-primary/8 p-4 min-[900px]:border-b-0 min-[900px]:border-r">
+          <div className="border-b border-border bg-primary/8 p-3 min-[900px]:border-b-0 min-[900px]:border-r">
             <Badge variant="secondary">{t("settings.orden.templates.badge")}</Badge>
-            <h3 className="mt-3 text-base font-semibold">{t("settings.orden.templates.goalTitle", { defaultValue: "What do you want Shelfy to do?" })}</h3>
+            <h3 className="mt-2 text-base font-semibold">{t("settings.orden.templates.goalTitle", { defaultValue: "What do you want Shelfy to do?" })}</h3>
             <p className="mt-1 text-xs text-muted-foreground">{t("settings.orden.templates.goalDescription", { defaultValue: "Start with an outcome. You can adjust every card before running." })}</p>
           </div>
-          <div className="no-scrollbar flex gap-2 overflow-x-auto p-3">
+            <div className="no-scrollbar flex gap-2 overflow-x-auto p-2.5">
             {categories.map((value) => {
               const count = value === "all" ? templates.length : templates.filter((template) => templateTone(template) === value).length;
               return (
-                <button key={value} type="button" onClick={() => setCategory(value)} aria-pressed={category === value} className={cn("min-w-28 rounded-lg border px-3 py-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", category === value ? "border-primary/50 bg-primary/10 text-primary" : "border-border bg-card hover:border-primary/25 hover:bg-muted/20")}>
+                  <button key={value} type="button" onClick={() => setCategory(value)} aria-pressed={category === value} className={cn("min-w-28 rounded-lg border px-3 py-2 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring", category === value ? "border-primary/50 bg-primary/10 text-primary" : "border-border bg-card hover:border-primary/25 hover:bg-muted/20")}>
                   <div className="text-xs font-semibold">{value === "all" ? t("settings.orden.templates.sections.all") : t(`settings.orden.templates.categories.${value}`)}</div>
                   <div className="mt-1 text-[10px] text-muted-foreground">{t("settings.orden.templates.recipeCount", { defaultValue: "{{count}} recipes", count })}</div>
                 </button>
@@ -389,16 +389,16 @@ export function OrdenTemplateCenter({
                 const label = templateLabel(template, t);
                 const summary = parseTemplateFlow(template.yaml);
                 return (
-                  <article key={template.id} className={cn("group relative min-h-44 overflow-hidden rounded-lg border text-left transition hover:-translate-y-0.5 hover:shadow-md", tone.card, tone.border, selectedId === template.id && "ring-1 ring-primary/45")}>
+                  <article key={template.id} className={cn("group relative min-h-40 overflow-hidden rounded-lg border text-left transition hover:-translate-y-0.5 hover:shadow-md", tone.card, tone.border, selectedId === template.id && "ring-1 ring-primary/45")}>
                     <button type="button" className="absolute inset-0 z-0 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring" onClick={() => selectTemplate(template.id)} aria-label={t("settings.orden.templates.viewTemplate", { name: label })} />
                     <div className={cn("h-1", tone.bar)} />
-                    <div className="pointer-events-none relative z-[1] flex min-h-43 flex-col p-3 text-foreground">
+                    <div className="pointer-events-none relative z-[1] flex min-h-39 flex-col p-2.5 text-foreground">
                       <div className="flex items-start justify-between gap-3">
                         <div className={cn("flex size-9 items-center justify-center rounded-lg", tone.icon)}>{renderIcon(template, "size-4")}</div>
                         <Button type="button" size="icon-sm" variant="ghost" className="pointer-events-auto relative z-10 bg-background/70 text-foreground hover:bg-background" onClick={() => void handleUse(template)} disabled={busyId === template.id} aria-label={t("settings.orden.templates.addToOrden")}><Plus /></Button>
                       </div>
-                      <div className="mt-3"><div className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{templateCategory(template, t)}</div><h3 className="mt-0.5 text-sm font-semibold leading-tight">{label}</h3><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{templateDescription(template, t)}</p></div>
-                      <div className="mt-auto flex items-center gap-1.5 pt-3 text-[10px] text-muted-foreground">
+                      <div className="mt-2.5"><div className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{templateCategory(template, t)}</div><h3 className="mt-0.5 text-sm font-semibold leading-tight">{label}</h3><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{templateDescription(template, t)}</p></div>
+                      <div className="mt-auto flex items-center gap-1.5 pt-2.5 text-[10px] text-muted-foreground">
                         <span className="max-w-20 truncate">{compactList(summary.sources, "—")}</span><ArrowRight className="size-3 shrink-0" /><span className="max-w-16 truncate">{compactList(summary.filters, t("settings.orden.noFilter"))}</span><ArrowRight className="size-3 shrink-0" /><span className="max-w-16 truncate">{compactList(summary.actions, "—")}</span>
                       </div>
                     </div>
@@ -407,7 +407,7 @@ export function OrdenTemplateCenter({
               })}
             </div>
           ) : (
-            <Card className="py-12 text-center text-sm text-muted-foreground">{section === "custom" && !query.trim() ? t("settings.orden.templates.emptyCustom") : t("settings.orden.templates.empty")}</Card>
+            <Card className="py-8 text-center text-sm text-muted-foreground">{section === "custom" && !query.trim() ? t("settings.orden.templates.emptyCustom") : t("settings.orden.templates.empty")}</Card>
           )}
         </div>
 
@@ -415,7 +415,7 @@ export function OrdenTemplateCenter({
           {selectedTemplate && selectedTone && selectedSummary ? (
             <Card className={cn("overflow-hidden", selectedTone.border)}>
               <div className={cn("h-1.5", selectedTone.bar)} />
-              <div className="p-3.5">
+              <div className="p-3">
                 <div className="flex items-start gap-3">
                   <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg", selectedTone.icon)}>{renderIcon(selectedTemplate, "size-5")}</div>
                   <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline">{templateCategory(selectedTemplate, t)}</Badge><Badge variant={selectedSummary.safety === "destructive" ? "destructive" : "secondary"}>{safetyLabel(selectedSummary.safety)}</Badge></div><h3 className="mt-2 text-base font-semibold">{templateLabel(selectedTemplate, t)}</h3><p className="mt-1 text-xs text-muted-foreground">{templateDescription(selectedTemplate, t)}</p></div>
@@ -446,7 +446,7 @@ export function OrdenTemplateCenter({
                 </details>
               </div>
             </Card>
-          ) : <Card className="p-6 text-center text-sm text-muted-foreground">{t("settings.orden.templates.empty")}</Card>}
+          ) : <Card className="p-4 text-center text-sm text-muted-foreground">{t("settings.orden.templates.empty")}</Card>}
         </aside>
       </div>
 

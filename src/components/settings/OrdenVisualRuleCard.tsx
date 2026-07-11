@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
+  ArrowRight,
   ChevronLeft,
   ChevronRight,
   FileCheck2,
@@ -55,7 +56,7 @@ export function OrdenVisualRuleCard({
 
   return (
     <Card className="overflow-hidden">
-      <CardHeader className="flex-row items-center justify-between gap-3 border-b border-border bg-muted/20">
+      <CardHeader className="flex-row items-center justify-between gap-3 border-b border-border bg-muted/20 px-3 py-2.5">
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-sm font-semibold text-primary">
             {index + 1}
@@ -78,8 +79,8 @@ export function OrdenVisualRuleCard({
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3 pt-3.5">
-        <div className="grid gap-2.5 rounded-lg border border-border/80 bg-muted/15 p-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(9rem,.55fr)_minmax(0,.8fr)]">
+      <CardContent className="space-y-3 px-3 pt-3 pb-3">
+        <div className="grid gap-2.5 border-b border-border/70 pb-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(9rem,.55fr)_minmax(0,.8fr)]">
           <div>
             <Label htmlFor={fieldId("name")} className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.name")}</Label>
             <Input id={fieldId("name")} value={rule.name} onChange={(event) => onUpdate(rule.id, { name: event.target.value })} />
@@ -109,7 +110,8 @@ export function OrdenVisualRuleCard({
         </div>
 
         <div className="grid gap-3 min-[1120px]:grid-cols-[minmax(15rem,.72fr)_minmax(20rem,1fr)_minmax(20rem,1fr)]">
-          <section className="min-w-0 rounded-lg border border-border bg-card p-3 shadow-sm">
+          <section className="relative min-w-0 rounded-lg border border-border bg-card p-2.5">
+            <div className="pointer-events-none absolute -right-6 top-1/2 z-10 hidden -translate-y-1/2 items-center min-[1120px]:flex" aria-hidden="true"><span className="h-px w-3 bg-border" /><span className="flex size-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground"><ArrowRight className="size-3" /></span></div>
             <div className="mb-2.5 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <div className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary"><Files className="size-3.5" /></div>
@@ -125,12 +127,12 @@ export function OrdenVisualRuleCard({
               </div>
             </div>
 
-            <button type="button" onClick={() => setSourceEditing((current) => !current)} className={`w-full rounded-lg border p-3 text-left shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${sourceEditing ? "border-primary/55 bg-primary/8 ring-1 ring-primary/20" : "border-border bg-background hover:border-primary/30"}`} aria-expanded={sourceEditing}>
+            <button type="button" onClick={() => setSourceEditing((current) => !current)} className={`w-full rounded-lg border p-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${sourceEditing ? "border-primary/55 bg-primary/8 ring-1 ring-primary/20" : "border-border bg-background hover:border-primary/30"}`} aria-expanded={sourceEditing}>
               <div className="flex items-start justify-between gap-2">
                 <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"><FolderOpen className="size-4" /></div>
                 <Badge variant="outline" className="text-[10px]">{rule.targets === "dirs" ? t("settings.orden.targetDirs") : t("settings.orden.targetFiles")}</Badge>
               </div>
-              <div className="mt-3 break-all text-sm font-semibold leading-tight">{visibleSources[sourceIndex]}</div>
+              <div className="mt-2 break-all text-sm font-semibold leading-tight">{visibleSources[sourceIndex]}</div>
               <div className="mt-1 text-xs text-muted-foreground">{rule.subfolders ? t("settings.orden.subfolders") : t("settings.orden.workflow.currentFolderOnly", { defaultValue: "Current folder only" })}</div>
             </button>
 
@@ -147,7 +149,8 @@ export function OrdenVisualRuleCard({
             )}
           </section>
 
-          <section className="min-w-0 rounded-lg border border-border bg-card p-3 shadow-sm">
+          <section className="relative min-w-0 rounded-lg border border-border bg-card p-2.5">
+            <div className="pointer-events-none absolute -right-6 top-1/2 z-10 hidden -translate-y-1/2 items-center min-[1120px]:flex" aria-hidden="true"><span className="h-px w-3 bg-border" /><span className="flex size-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground"><ArrowRight className="size-3" /></span></div>
             <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <div className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary"><Filter className="size-3.5" /></div>
@@ -158,7 +161,7 @@ export function OrdenVisualRuleCard({
               </div>
               <div className="flex rounded-lg border border-border bg-muted/20 p-0.5" aria-label={t("settings.orden.filterMode")}>
                 {(["all", "any", "none"] as const).map((mode) => (
-                  <Button key={mode} type="button" size="xs" variant={(rule.filterMode || "all") === mode ? "secondary" : "ghost"} aria-pressed={(rule.filterMode || "all") === mode} onClick={() => onUpdate(rule.id, { filterMode: mode })} className="h-6 px-2 text-[10px]">
+                  <Button key={mode} type="button" size="sm" variant={(rule.filterMode || "all") === mode ? "secondary" : "ghost"} aria-pressed={(rule.filterMode || "all") === mode} onClick={() => onUpdate(rule.id, { filterMode: mode })} className="px-2 text-[10px]">
                     {t(`settings.orden.workflow.mode_${mode}`, { defaultValue: mode.toUpperCase() })}
                   </Button>
                 ))}
@@ -167,7 +170,7 @@ export function OrdenVisualRuleCard({
             <OrdenPipelineEditor mode="filter" steps={rule.filterSteps || []} onChange={(filterSteps) => onUpdate(rule.id, { filterSteps })} />
           </section>
 
-          <section className="min-w-0 rounded-lg border border-border bg-card p-3 shadow-sm">
+          <section className="min-w-0 rounded-lg border border-border bg-card p-2.5">
             <div className="mb-2.5 flex items-center gap-2">
               <div className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary"><WandSparkles className="size-3.5" /></div>
               <div>

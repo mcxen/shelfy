@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import {
   Archive,
+  ArrowRight,
   ArrowDown,
   ArrowUp,
   Braces,
@@ -16,6 +17,7 @@ import {
   Fingerprint,
   FolderInput,
   FolderOpen,
+  GripVertical,
   Hash,
   Link2,
   LucideIcon,
@@ -143,6 +145,8 @@ export function OrdenPipelineEditor({
   const definitions = mode === "filter" ? FILTER_DEFINITIONS : ACTION_DEFINITIONS;
   const railRef = useRef<HTMLDivElement>(null);
   const [selectedId, setSelectedId] = useState<string | null>(steps[0]?.id || null);
+  const [draggedIndex, setDraggedIndex] = useState<number | null>(null);
+  const [dropIndex, setDropIndex] = useState<number | null>(null);
 
   useEffect(() => {
     if (steps.length === 0) {
@@ -168,19 +172,20 @@ export function OrdenPipelineEditor({
     onChange(steps.map((step) => (step.id === id ? { ...step, ...patch } : step)));
   };
 
-  const add = (kind: string) => {
+  const add = (kind: string, index = steps.length) => {
     const id = `${mode}-${Date.now()}-${steps.length}`;
-    onChange([
-      ...steps,
-      {
-        id,
-        kind,
-        value: PRESETS[kind] ?? "",
-        inverted: false,
-      },
-    ]);
+    const next = [...steps];
+    next.splice(index, 0, {
+      id,
+      kind,
+      value: PRESETS[kind] ?? "",
+      inverted: false,
+    });
+    onChange(next);
     setSelectedId(id);
-    window.setTimeout(() => railRef.current?.scrollTo({ left: railRef.current.scrollWidth, behavior: "smooth" }), 0);
+    if (index === steps.length) {
+      window.setTimeout(() => railRef.current?.scrollTo({ left: railRef.current.scrollWidth, behavior: "smooth" }), 0);
+    }
   };
 
   const move = (index: number, offset: number) => {
@@ -191,11 +196,19 @@ export function OrdenPipelineEditor({
     onChange(next);
   };
 
+  const reorder = (from: number, to: number) => {
+    if (from === to || from < 0 || to < 0 || from >= steps.length || to >= steps.length) return;
+    const next = [...steps];
+    const [item] = next.splice(from, 1);
+    next.splice(to, 0, item);
+    onChange(next);
+  };
+
   const scrollRail = (direction: -1 | 1) => {
     railRef.current?.scrollBy({ left: direction * 190, behavior: "smooth" });
   };
 
-  const renderLibraryGroup = (common: boolean) => {
+  const renderLibraryGroup = (common: boolean, insertAt = steps.length) => {
     const items = definitions.filter((definition) => Boolean(definition.common) === common);
     if (items.length === 0) return null;
     return (
@@ -208,7 +221,7 @@ export function OrdenPipelineEditor({
         {items.map((definition) => {
           const Icon = definition.icon;
           return (
-            <MenuItem key={definition.kind} onClick={() => add(definition.kind)} className="items-start py-2">
+            <MenuItem key={definition.kind} onClick={() => add(definition.kind, insertAt)} className="items-start py-2">
               <Icon className="mt-0.5" />
               <span className="min-w-0">
                 <span className="block font-medium">{translated(definition, "label")}</span>
@@ -220,6 +233,34 @@ export function OrdenPipelineEditor({
       </MenuGroup>
     );
   };
+
+  const renderAddMenu = (insertAt: number, compact = false) => (
+    <Menu>
+      <MenuTrigger
+        render={
+          compact ? (
+            <button
+              type="button"
+              className="group flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition hover:border-primary/50 hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              aria-label={mode === "filter" ? t("settings.orden.addFilter") : t("settings.orden.addAction")}
+            >
+              <Plus className="size-3" />
+            </button>
+          ) : (
+            <button type="button" className="flex min-h-28 w-32 shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/10 p-3 text-xs font-medium text-muted-foreground transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+              <span className="flex size-8 items-center justify-center rounded-lg border border-current/20 bg-background"><Plus className="size-4" /></span>
+              {mode === "filter" ? t("settings.orden.addFilter") : t("settings.orden.addAction")}
+            </button>
+          )
+        }
+      />
+      <MenuPopup className="w-72" align={compact ? "center" : "start"}>
+        {renderLibraryGroup(true, insertAt)}
+        <MenuSeparator />
+        {renderLibraryGroup(false, insertAt)}
+      </MenuPopup>
+    </Menu>
+  );
 
   const selectedIndex = steps.findIndex((step) => step.id === selectedId);
   const selectedStep = selectedIndex >= 0 ? steps[selectedIndex] : null;
@@ -284,57 +325,77 @@ export function OrdenPipelineEditor({
 
       {steps.length > 0 && (
         <>
-          <div ref={railRef} className="no-scrollbar flex snap-x gap-2 overflow-x-auto pb-1" role="list" aria-label={mode === "filter" ? t("settings.orden.filterPipeline") : t("settings.orden.actionPipeline")}>
+          <div ref={railRef} className="no-scrollbar flex snap-x items-stretch overflow-x-auto pb-1" role="list" aria-label={mode === "filter" ? t("settings.orden.filterPipeline") : t("settings.orden.actionPipeline")}>
             {steps.map((step, index) => {
               const definition = definitionFor(step.kind);
               const Icon = definition.icon;
               const selected = step.id === selectedId;
               return (
-                <button
-                  key={step.id}
-                  type="button"
-                  role="listitem"
-                  onClick={() => setSelectedId(step.id)}
-                  className={`group min-h-28 w-40 shrink-0 snap-start rounded-lg border p-3 text-left shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
-                    selected
-                      ? "border-primary/55 bg-primary/8 ring-1 ring-primary/20"
-                      : "border-border bg-card hover:border-primary/30 hover:bg-muted/20"
-                  }`}
-                  aria-pressed={selected}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className={`flex size-8 items-center justify-center rounded-lg ${selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
-                      <Icon className="size-4" />
+                <Fragment key={step.id}>
+                  {index > 0 && (
+                    <div className="flex w-12 shrink-0 items-center justify-center">
+                      <div className="h-px flex-1 bg-border" aria-hidden="true" />
+                      <div className="-mx-1.5 pointer-events-auto">{renderAddMenu(index, true)}</div>
+                      <ArrowRight className="-ml-1 size-3.5 text-muted-foreground/70" aria-hidden="true" />
                     </div>
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                      {mode === "filter" ? "IF" : `${index + 1}`}
-                    </span>
-                  </div>
-                  <div className="mt-3 text-sm font-semibold leading-tight">{translated(definition, "label")}</div>
-                  <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
-                    {step.value.trim() || t("settings.orden.workflow.noParameters", { defaultValue: "No parameters" })}
-                  </div>
-                  {step.inverted && mode === "filter" && (
-                    <Badge variant="outline" className="mt-2 h-5 px-1.5 text-[10px]">NOT</Badge>
                   )}
-                </button>
+                  <div
+                    className={`relative shrink-0 snap-start transition ${draggedIndex === index ? "opacity-45" : "opacity-100"} ${dropIndex === index && draggedIndex !== index ? "before:absolute before:-left-1 before:inset-y-1 before:w-0.5 before:rounded-full before:bg-primary" : ""}`}
+                    draggable
+                    role="listitem"
+                    onDragStart={(event) => {
+                      event.dataTransfer.effectAllowed = "move";
+                      event.dataTransfer.setData("text/plain", step.id);
+                      setDraggedIndex(index);
+                    }}
+                    onDragOver={(event) => {
+                      event.preventDefault();
+                      event.dataTransfer.dropEffect = "move";
+                      setDropIndex(index);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      if (draggedIndex !== null) reorder(draggedIndex, index);
+                      setDraggedIndex(null);
+                      setDropIndex(null);
+                    }}
+                    onDragEnd={() => {
+                      setDraggedIndex(null);
+                      setDropIndex(null);
+                    }}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => setSelectedId(step.id)}
+                      className={`group min-h-28 w-40 rounded-lg border p-3 text-left shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                        selected
+                          ? "border-primary/55 bg-primary/8 ring-1 ring-primary/20"
+                          : "border-border bg-card hover:border-primary/30 hover:bg-muted/20"
+                      }`}
+                      aria-pressed={selected}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className={`flex size-8 items-center justify-center rounded-lg ${selected ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                          <Icon className="size-4" />
+                        </div>
+                        <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+                          {mode === "filter" ? "IF" : `${index + 1}`}
+                          <GripVertical className="size-3.5 cursor-grab opacity-50 group-hover:opacity-100" />
+                        </span>
+                      </div>
+                      <div className="mt-3 text-sm font-semibold leading-tight">{translated(definition, "label")}</div>
+                      <div className="mt-1 truncate font-mono text-[10px] text-muted-foreground">
+                        {step.value.trim() || t("settings.orden.workflow.noParameters", { defaultValue: "No parameters" })}
+                      </div>
+                      {step.inverted && mode === "filter" && (
+                        <Badge variant="outline" className="mt-2 h-5 px-1.5 text-[10px]">NOT</Badge>
+                      )}
+                    </button>
+                  </div>
+                </Fragment>
               );
             })}
-            <Menu>
-              <MenuTrigger
-                render={
-                  <button type="button" className="flex min-h-28 w-32 shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/10 p-3 text-xs font-medium text-muted-foreground transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
-                    <span className="flex size-8 items-center justify-center rounded-lg border border-current/20 bg-background"><Plus className="size-4" /></span>
-                    {mode === "filter" ? t("settings.orden.addFilter") : t("settings.orden.addAction")}
-                  </button>
-                }
-              />
-              <MenuPopup className="w-72" align="start">
-                {renderLibraryGroup(true)}
-                <MenuSeparator />
-                {renderLibraryGroup(false)}
-              </MenuPopup>
-            </Menu>
+            <div className="ml-2">{renderAddMenu(steps.length)}</div>
           </div>
 
           {selectedStep && selectedDefinition && (

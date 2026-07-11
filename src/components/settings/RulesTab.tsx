@@ -150,15 +150,16 @@ export function RulesTab({
   );
 
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <div>
+    <div className="flex flex-col gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
           <h2 className="text-lg font-semibold">{t("settings.rules.title")}</h2>
           <p className="text-xs text-muted-foreground">{t("settings.rules.description")}</p>
         </div>
         <Button
           type="button"
           size="sm"
+          className="shrink-0"
           onClick={() => setEditingRule(newRule())}
         >
           <AnimatedIcon icon={Plus} size={14} motion="bounce" />
@@ -166,7 +167,7 @@ export function RulesTab({
         </Button>
       </div>
 
-      <Card className="order-3 space-y-3 p-3.5">
+      <Card className="order-3 space-y-2.5 p-3">
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold">{t("settings.folders.title")}</h3>
@@ -220,7 +221,7 @@ export function RulesTab({
         </div>
       </Card>
 
-      <Card className="order-4 space-y-3 p-3.5">
+      <Card className="order-4 space-y-2.5 p-3">
         <div className="flex flex-wrap items-center gap-2">
           <Button onClick={handleExportRules} variant="outline">
             <AnimatedIcon icon={Download} size={14} motion="float" />
@@ -250,17 +251,17 @@ export function RulesTab({
 
       {editingRule && (
         <Card className="order-1 overflow-hidden">
-          <CardHeader className="border-b border-border bg-muted/20">
+          <CardHeader className="border-b border-border bg-muted/20 px-3 py-2.5">
             <CardTitle>{editingRule.id ? t("settings.rules.updateTitle") : t("settings.rules.createTitle")}</CardTitle>
             <CardDescription>{t("settings.rules.editorDescription")}</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-3 pt-4">
-            <section className="rounded-lg border border-border/70">
-              <CardHeader>
+          <CardContent className="space-y-3 px-3 pt-3 pb-3">
+            <section className="border-b border-border/70 pb-3">
+              <CardHeader className="px-0 py-0 pb-2">
                 <CardTitle className="text-sm">1. {t("settings.rules.basicSettings")}</CardTitle>
                 <CardDescription className="text-xs">{t("settings.rules.basicSettingsDesc")}</CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-[minmax(0,1fr)_8rem_auto]">
+              <CardContent className="grid gap-3 p-0 md:grid-cols-[minmax(0,1fr)_8rem_auto]">
                 <div>
                   <Label htmlFor="rule-name" className="mb-1 block text-xs text-muted-foreground">{t("settings.rules.name")}</Label>
                   <Input id="rule-name" type="text" value={editingRule.name} onChange={(event) => setEditingRule({ ...editingRule, name: event.target.value })} />
@@ -276,12 +277,12 @@ export function RulesTab({
               </CardContent>
             </section>
 
-            <section className="rounded-lg border border-border/70">
-              <CardHeader>
+            <section className="border-b border-border/70 pb-3">
+              <CardHeader className="px-0 py-0 pb-2">
                 <CardTitle className="text-sm">2. {t("settings.rules.matchSettings")}</CardTitle>
                 <CardDescription className="text-xs">{t("settings.rules.matchSettingsDesc")}</CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-2">
+              <CardContent className="grid gap-3 p-0 md:grid-cols-2">
                 <div className="md:col-span-2">
                   <Label htmlFor="rule-scope" className="mb-1 block text-xs text-muted-foreground">{t("settings.rules.folderScope")}</Label>
                   <Select
@@ -340,12 +341,12 @@ export function RulesTab({
               </CardContent>
             </section>
 
-            <section className="rounded-lg border border-border/70">
-              <CardHeader>
+            <section>
+              <CardHeader className="px-0 py-0 pb-2">
                 <CardTitle className="text-sm">3. {t("settings.rules.actionSettings")}</CardTitle>
                 <CardDescription className="text-xs">{t("settings.rules.actionSettingsDesc")}</CardDescription>
               </CardHeader>
-              <CardContent className="grid gap-3 md:grid-cols-[12rem_minmax(0,1fr)]">
+              <CardContent className="grid gap-3 p-0 md:grid-cols-[12rem_minmax(0,1fr)]">
                 <div>
                   <Label htmlFor="rule-action" className="mb-1 block text-xs text-muted-foreground">{t("settings.rules.action")}</Label>
                   <Select value={editingRule.action} onValueChange={(value) => setEditingRule({ ...editingRule, action: value })}>
@@ -399,7 +400,7 @@ export function RulesTab({
           <Badge variant="secondary">{t("settings.rules.ruleCount", { count: rules.length })}</Badge>
         </CardHeader>
         <CardContent className="p-0">
-          <div className="hidden min-[780px]:block"><Table className="table-fixed">
+          <div className="hidden min-[900px]:block"><Table className="table-fixed">
             <TableHeader>
               <TableRow>
                 <TableHead className="w-[38%]">{t("settings.rules.rule")}</TableHead>
@@ -433,12 +434,12 @@ export function RulesTab({
                 </TableRow>
               ))}
               {rules.length === 0 && (
-                <TableRow><TableCell colSpan={6} className="py-10 text-center text-muted-foreground">{t("settings.rules.noRules")}</TableCell></TableRow>
+                <TableRow><TableCell colSpan={6} className="py-5 text-center text-muted-foreground">{t("settings.rules.noRules")}</TableCell></TableRow>
               )}
             </TableBody>
             <TableFooter><TableRow><TableCell colSpan={5}>{t("settings.rules.totalRules")}</TableCell><TableCell className="text-right">{rules.length}</TableCell></TableRow></TableFooter>
           </Table></div>
-          <div className="divide-y divide-border min-[780px]:hidden">
+          <div className="divide-y divide-border min-[900px]:hidden">
             {rules.map((rule) => (
               <div key={rule.id || rule.name} className="space-y-2 px-3 py-3">
                 <div className="flex items-start justify-between gap-3">
@@ -453,7 +454,7 @@ export function RulesTab({
                 </div>
               </div>
             ))}
-            {rules.length === 0 && <div className="px-3 py-8 text-center text-sm text-muted-foreground">{t("settings.rules.noRules")}</div>}
+            {rules.length === 0 && <div className="px-3 py-5 text-center text-sm text-muted-foreground">{t("settings.rules.noRules")}</div>}
           </div>
         </CardContent>
       </Card>

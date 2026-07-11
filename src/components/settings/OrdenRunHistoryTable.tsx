@@ -5,6 +5,7 @@ import { OrdenLog, OrdenRunHistory } from "../../store/useAppStore";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 
 interface OrdenRunHistoryTableProps {
   rows: OrdenRunHistory[];
@@ -49,7 +50,7 @@ export function OrdenRunHistoryTable({
   };
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
         <div>
           <h3 className="font-medium">{t("settings.orden.history")}</h3>
@@ -81,12 +82,13 @@ export function OrdenRunHistoryTable({
       </div>
 
       {rows.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-border px-3 py-6 text-center text-xs text-muted-foreground">
+        <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-xs text-muted-foreground">
           {t("settings.orden.noHistory")}
         </div>
       ) : (
-        <div className="overflow-hidden rounded-xl border border-border">
-          <Table>
+        <>
+          <div className="hidden overflow-hidden rounded-lg border border-border min-[900px]:block">
+            <Table>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-10" />
@@ -111,8 +113,7 @@ export function OrdenRunHistoryTable({
                           type="button"
                           onClick={() => toggle(key)}
                           variant="ghost"
-                          size="icon"
-                          className="size-7"
+                          size="icon-sm"
                           aria-label={isExpanded ? t("settings.orden.collapseProcess") : t("settings.orden.expandProcess")}
                         >
                           {isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
@@ -143,8 +144,8 @@ export function OrdenRunHistoryTable({
                               if (window.confirm(t("settings.orden.deleteHistoryConfirm"))) void onDelete(row.id!);
                             }}
                             variant="ghost"
-                            size="icon"
-                            className="size-7 text-destructive hover:bg-destructive/10 hover:text-destructive"
+                            size="icon-sm"
+                            className="text-destructive hover:bg-destructive/10 hover:text-destructive"
                             aria-label={t("settings.orden.deleteHistory")}
                           >
                             <Trash2 size={13} />
@@ -190,8 +191,47 @@ export function OrdenRunHistoryTable({
                 );
               })}
             </TableBody>
-          </Table>
-        </div>
+            </Table>
+          </div>
+          <div className="space-y-2 min-[900px]:hidden">
+            {rows.map((row) => {
+              const key = rowKey(row);
+              const isExpanded = expanded.has(key);
+              const logs = isExpanded ? parseLogs(row.logs_json) : [];
+              return <div key={key} className="rounded-lg border border-border p-3">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <div className="text-sm font-medium">{new Date(row.timestamp).toLocaleString()}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                      <span>{row.trigger}</span>
+                      <Badge variant="outline">{row.simulate ? t("settings.orden.simulated") : t("settings.orden.applied")}</Badge>
+                      <Badge variant={row.errors > 0 ? "destructive" : "secondary"}>{row.success} / {row.errors}</Badge>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild><Button type="button" onClick={() => toggle(key)} variant="ghost" size="icon-sm" aria-label={isExpanded ? t("settings.orden.collapseProcess") : t("settings.orden.expandProcess")}>{isExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}</Button></TooltipTrigger>
+                      <TooltipContent>{isExpanded ? t("settings.orden.collapseProcess") : t("settings.orden.expandProcess")}</TooltipContent>
+                    </Tooltip>
+                    {row.id != null && onDelete && <Tooltip>
+                      <TooltipTrigger asChild><Button type="button" onClick={() => { if (window.confirm(t("settings.orden.deleteHistoryConfirm"))) void onDelete(row.id!); }} variant="ghost" size="icon-sm" className="text-destructive hover:bg-destructive/10 hover:text-destructive" aria-label={t("settings.orden.deleteHistory")}><Trash2 size={13} /></Button></TooltipTrigger>
+                      <TooltipContent>{t("settings.orden.deleteHistory")}</TooltipContent>
+                    </Tooltip>}
+                  </div>
+                </div>
+                <div className="mt-2 text-xs text-muted-foreground">{t("settings.orden.processSteps", { count: logCounts[key] || 0 })}</div>
+                {isExpanded && <div className="mt-3 border-t border-border pt-2">
+                  {logs.length === 0 ? <div className="py-2 text-xs text-muted-foreground">{t("settings.orden.noLogs")}</div> : <div className="divide-y divide-border">
+                    {logs.map((log, index) => <div key={`${key}-${index}`} className="py-2 text-xs">
+                      <div className="flex flex-wrap items-center gap-1.5"><span className={log.level === "error" ? "text-destructive" : "text-muted-foreground"}>#{index + 1}</span><Badge variant={log.level === "error" ? "destructive" : "outline"} className="w-fit">{log.level}</Badge><span className="text-muted-foreground">{log.sender} · #{log.rule_nr + 1}</span></div>
+                      <div className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{log.path}</div><div className="mt-1 break-words">{log.msg}</div>
+                    </div>)}
+                  </div>}
+                </div>}
+              </div>;
+            })}
+          </div>
+        </>
       )}
     </div>
   );

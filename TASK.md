@@ -180,6 +180,7 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] 新增 Orden 模版中心 Tab：系统模版浏览、详情预览、加号快速生成配置；系统/用户模版持久化到本地 `orden/templates/` YAML 文件并支持编辑另存
 - [x] 修复 Orden 模板渲染按字节转换 Unicode 字符导致中文文件/目录名乱码；补多字节文本和环境变量回归测试
 - [x] Orden Visual 重构为小卡片流程：多来源左右切换、条件/动作动态卡片轨道、选中卡片参数检查器和快捷卡片库
+- [x] Orden 流程编排增强方向连线、步骤间插入点与拖拽重排，并保留键盘可达的顺序按钮
 - [x] 模版中心重构为目标分类、流程摘要、文件影响提示和“使用后直接进入 Visual 编辑”的渐进式入口
 - [x] 新增 `shelfy --mcp` / `shelfy --cli mcp` stdio MCP 服务
 - [x] MCP 写工具由独立 `mcp_allow_write` 控制
@@ -190,6 +191,8 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] Settings 从左侧栏改为顶部浮动导航，窗口外壳与 Popup 使用克制的玻璃质感
 - [x] 压缩主内容边距和无效留白，General/Ignore/Orden Preview 使用统一 Card 与响应式布局
 - [x] Popup / Settings 使用动态分包，Settings 数据改为进入对应 tab 后再加载
+- [x] 将 Orden 配置中心、编辑器、任务与模版中心从 `Settings.tsx` 拆至独立 `OrdenTab` 容器，Settings 只协调导航、历史跳转与权限提示
+- [x] 新增 `public/architecture/README.md`，记录 Rules/Orden 双引擎、执行入口、存储、调度、MCP 和维护清单
 - [x] Orden 配置中心仅预取每份配置最近一次结果，进入详情后再加载完整历史与 YAML
 - [x] Popup 后台轮询从 5 秒全量刷新拆为 15 秒 pending / 60 秒 Orden tasks，并在窗口失焦时停止
 - [x] Orden 手动/任务执行改为独立 worker 线程，Tauri 通过任务句柄轮询结果；scheduler/watcher/CLI/MCP 也不再在调用线程直接执行规则
@@ -203,9 +206,9 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] P0 模版中心筛选：系统模版/我的模版切换时同步详情选择
 - [x] P0 模版中心完善：另存后自动进入我的模版、修复卡片嵌套交互、同步内置模版更新并补测试
 - [x] P1 General 控件宽度：大窗口使用紧凑固定宽度，窄窗口保持自适应铺满
-- [ ] P0 Rules / Orden 响应式操作区：700px 与 900px 不裁切
+- [x] P0 Rules / Orden 响应式操作区：700px 与 900px 不裁切
 - [ ] P1 全局颜色与按钮尺寸：拉开 surface 层级，移除偏黄正文和品牌外渐变，建立 28/32px 按钮层级
-- [ ] P1 页面密度：收紧 Rules、General、Template、Orden、History 的 Card、表格、工具栏和空状态
+- [x] P1 页面密度：Rules / General / Template / Orden / History 的 Card、表格、工具栏和空状态已完成
 - [ ] P2 交互可访问性：Tooltip、表单标签、本地化枚举，并用 Dialog/Alert Dialog 替代审计范围内原生 prompt/confirm
 - [ ] 回归验收：浅色/深色、中文/英文、700×500、900×650、1280×800
 - [x] 新增 `docs/UI_AUDIT.md`，完成 6 张截图的问题编号、代码根因、建议与验收标准映射
@@ -225,13 +228,13 @@ Settings → Advanced 是当前图形入口，支持：
 - 品牌图标与主题替换已通过 `npm run build`、`cargo build`；Tray 资产哈希校验保持不变。
 - 剩余设计点：非 move/rename 的 orden 动作如何进入 Shelfy History/Undo 需要单独定义语义，避免 copy/delete/trash/shell 被现有“反向 rename”撤销逻辑误处理。
 - 已被旧版 Orden 模板写入磁盘的乱码文件名无法在不扫描和确认目标的情况下安全自动恢复；需要单独设计预览式修复工具。
-- UI 阶段 9 已开工；当前无阻塞，按 P0 → P1 → P2 推进。
+- UI 阶段 9 的 Rules / General / Template / Orden / History P1 页面密度已完成；剩余为全局主题和按钮体系修复。
 - Orden 卡片流程和新模版中心已通过 `npm run build`；真实 Tauri 窗口的 700/900/1280 截图验收仍待可用的桌面自动化环境完成。
 
 ## 下一步
 
-1. 在真实 Tauri 窗口完成 Orden 卡片流程与模版中心的 700×500、900×650、1280×800 浅深色截图验收
-2. 完成主题、按钮和五个设置页面的 P1 密度修复
+1. 在真实 Tauri 窗口完成 Rules、Orden 卡片流程与模版中心的 700×500、900×650、1280×800 浅深色截图验收
+2. 完成剩余主题和按钮体系修复
 3. 完成截图覆盖流程的 Tooltip、Dialog、标签与本地化 P2 修复
 4. 为 copy/delete/trash/shell 设计 History/Undo 策略，或显式标记为不可撤销事件
 5. 将 watcher/scheduler 的高级模式接入 orden 配置（当前 Settings/CLI/手动运行已接入）

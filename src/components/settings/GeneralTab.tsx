@@ -103,15 +103,15 @@ export function GeneralTab({
   const { t } = useTranslation();
 
   return (
-    <div className="w-full space-y-4">
-      <Card className="grid gap-x-4 gap-y-3 p-3.5 md:grid-cols-[18rem_18rem] lg:grid-cols-[20rem_20rem]">
+    <div className="w-full space-y-3">
+      <Card className="grid gap-x-4 gap-y-2.5 p-3 md:grid-cols-[18rem_18rem] lg:grid-cols-[20rem_20rem]">
         <div className="md:col-span-2">
           <h2 className="text-lg font-semibold">{t("settings.general.title")}</h2>
         </div>
         <div>
           <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.general.language")}</Label>
           <Select value={settings?.language || "en"} onValueChange={handleChangeLanguage}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-full md:max-w-80">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -129,7 +129,7 @@ export function GeneralTab({
         <div>
           <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.general.theme")}</Label>
           <Select value={settings?.theme || "system"} onValueChange={(value) => settings && saveSettings({ ...settings, theme: value })}>
-            <SelectTrigger className="w-full">
+            <SelectTrigger className="w-full md:max-w-80">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -188,7 +188,7 @@ export function GeneralTab({
         </div>
       </Card>
 
-      <Card className="space-y-3 p-3.5">
+      <Card className="space-y-2.5 p-3">
         <div>
           <h3 className="flex items-center gap-2 text-base font-semibold">
             <SlidersHorizontal size={16} className="text-primary" />
@@ -233,7 +233,7 @@ export function GeneralTab({
           })}
         </div>
 
-        <section className="max-w-4xl space-y-3 rounded-lg border border-border/70 bg-muted/15 p-3">
+        <section className="max-w-4xl space-y-2.5 rounded-lg border border-border/70 bg-muted/15 p-2.5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <Label className="text-sm text-muted-foreground">{t("settings.scheduler.cronEnable")}</Label>
@@ -258,7 +258,7 @@ export function GeneralTab({
           </div>
         </section>
 
-        <section className="max-w-4xl space-y-3 rounded-lg border border-border/70 bg-muted/15 p-3">
+        <section className="max-w-4xl space-y-2.5 rounded-lg border border-border/70 bg-muted/15 p-2.5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <Label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -309,10 +309,10 @@ export function GeneralTab({
           {t("settings.scheduler.save")}
         </Button>
 
-        <div className="space-y-2">
-          <div className="flex items-center justify-between">
+        <div className="space-y-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <Label className="text-sm text-muted-foreground">{t("settings.scheduler.logs")}</Label>
-            <div className="flex gap-2">
+            <div className="flex flex-wrap gap-1.5">
               <Button onClick={loadSchedulerLogs} variant="outline" size="sm">{t("settings.scheduler.refreshLogs")}</Button>
               <Button onClick={clearSchedulerLogs} variant="ghost" size="sm">{t("settings.scheduler.clearLogs")}</Button>
             </div>
@@ -323,7 +323,7 @@ export function GeneralTab({
             ) : (
               <div className="divide-y divide-border">
                 {schedulerLogs.map((log) => (
-                  <div key={log.id} className="grid grid-cols-[70px_130px_minmax(0,1fr)] gap-2 px-3 py-2 text-xs">
+                  <div key={log.id} className="grid grid-cols-[70px_130px_minmax(0,1fr)] gap-2 px-3 py-1.5 text-xs">
                     <span className={log.level === "error" ? "text-destructive" : "text-muted-foreground"}>{log.level}</span>
                     <span className="text-muted-foreground">{log.event}</span>
                     <span className="min-w-0 truncate" title={log.details || log.message}>{log.message}</span>
@@ -335,7 +335,7 @@ export function GeneralTab({
         </div>
       </Card>
 
-      <Card className="space-y-3 p-3.5">
+      <Card className="space-y-2.5 p-3">
         <div>
           <h3 className="flex items-center gap-2 text-base font-semibold">
             <Bot size={16} className="text-primary" />
@@ -434,7 +434,7 @@ export function GeneralTab({
         </div>
       </Card>
 
-      <Card className="space-y-3 p-3.5">
+      <Card className="space-y-2.5 p-3">
         <div>
           <h3 className="text-base font-semibold">{t("settings.config.title")}</h3>
           <p className="text-xs text-muted-foreground">{t("settings.config.desc")}</p>

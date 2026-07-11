@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { invoke } from '@tauri-apps/api/core';
+import { hasTauriRuntime } from '../lib/runtime';
 
 export interface Rule {
   id?: number;
@@ -387,11 +388,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   currentView: 'popup',
 
   loadSettings: async () => {
+    if (!hasTauriRuntime()) {
+      set({ settings: defaultSettings });
+      return;
+    }
     const settings = await invoke<AppSettings>('get_settings_cmd');
     set({ settings });
   },
 
   saveSettings: async (settings) => {
+    if (!hasTauriRuntime()) {
+      set({ settings });
+      return;
+    }
     await invoke('update_settings_cmd', { settings });
     set({ settings });
   },

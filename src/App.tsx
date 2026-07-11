@@ -5,6 +5,7 @@ import { useAppStore } from "./store/useAppStore";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { invoke } from "@tauri-apps/api/core";
 import { onAction } from "@tauri-apps/plugin-notification";
+import { hasTauriRuntime } from "./lib/runtime";
 
 const Popup = lazy(() => import("./components/Popup"));
 const Settings = lazy(() => import("./components/Settings"));
@@ -30,8 +31,14 @@ function App() {
   const [ready, setReady] = useState(false);
   const { loadSettings, settings } = useAppStore();
 
-  const hash = window.location.hash.replace("#/", "") || "popup";
+  const [hash, setHash] = useState(() => window.location.hash.replace("#/", "") || "popup");
   const route = hash.split("?", 1)[0];
+
+  useEffect(() => {
+    const handleHashChange = () => setHash(window.location.hash.replace("#/", "") || "popup");
+    window.addEventListener("hashchange", handleHashChange);
+    return () => window.removeEventListener("hashchange", handleHashChange);
+  }, []);
 
   useEffect(() => {
     async function boot() {
@@ -52,6 +59,7 @@ function App() {
   }, [settings?.theme]);
 
   useEffect(() => {
+    if (!hasTauriRuntime()) return;
     let actionListener: { unregister: () => Promise<void> } | null = null;
 
     // Listen for notification action clicks centrally
