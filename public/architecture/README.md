@@ -1,6 +1,6 @@
 # Shelfy 技术架构
 
-> 本文是当前实现的维护入口。修改模块边界、执行入口、持久化模型或前后端命令时，请同步更新本文。
+> 本文是当前实现的维护入口和代码定位索引。修改模块边界、执行入口、持久化模型、Visual 参数协议、UI 基础设施或前后端命令时，请同步更新本文。
 > Orden 的上游行为调研见仓库根目录 `RESEARCH.md`，内核任务状态见 `TASK.md`。
 
 ## 系统概览
@@ -22,6 +22,7 @@ Rust Tauri commands
 ```
 
 入口与装配在 `src-tauri/src/lib.rs`：启动时初始化数据库、托盘、文件监控和调度器，并集中注册 Tauri commands。
+主设置窗口关闭时只隐藏而不销毁或退出应用；托盘、Watcher 与 Scheduler 继续运行，用户可从托盘或 macOS Dock 重新打开窗口，只有托盘退出操作会结束进程。
 
 ## 两套规则引擎
 
@@ -118,12 +119,55 @@ src/
     OrdenTab.tsx             # Orden 配置、编辑器、任务、模板、详情与执行结果
     OrdenVisualRuleCard.tsx  # 来源 → 条件 → 动作 的可视化规则
     OrdenPipelineEditor.tsx  # 条件/动作卡片轨道与参数检查器
+    OrdenStepParameterEditor.tsx # 按 filter/action kind 绘制类型化参数并序列化 YAML value
     RulesTab.tsx             # SQLite 简单规则管理
+  components/ui/
+    tag-input.tsx            # 标签、扩展名、MIME、密码候选等短值列表
+    menu.tsx / select.tsx    # Portal 浮层及其主题化滚动容器
+  index.css                  # 明暗 token、全局 scrollbar、surface 与基础排版
 ```
 
 Settings 的 Orden 页面按需加载：首次进入 Advanced 时读取配置和任务；进入具体配置后才读取完整 YAML 与历史。窄窗口（小于 900px）使用可操作的卡片列表，桌面使用表格；不要新增只适用于表格的关键操作。
 
-Orden Visual 与 Source 的关系：Visual 仅覆盖常见字段，并序列化成 YAML；Source 是完整能力入口。复杂 YAML 的未知字段与注释目前不能保证 Visual round-trip，切换前应视为可能丢失非可视化表达。
+General 设置页位于 `components/settings/GeneralTab.tsx`，信息架构固定按“偏好设置 → 文件处理 → 自动化 → AI/MCP → 维护”排列。语言、主题、开机启动等简单设置在桌面端同排；宽限期和文件占用归入文件处理；固定时间、Cron、后台保活和调度日志归入自动化；更新与配置导入导出归入维护。新增通用设置时先归入现有类别，不要直接在页面末尾追加新 Card。
+
+Orden Visual 与 Source 的关系：Visual 覆盖当前 UI 可选的常用 filter/action，并序列化成 YAML；Source 是未知/高级语法的逃生入口。复杂 YAML 的未知字段与注释目前不能保证 Visual round-trip，切换前应视为可能丢失非可视化表达。
+
+### Visual 参数编辑链路
+
+```text
+OrdenVisualRuleCard
+  → OrdenPipelineEditor（步骤选择、排序、增删）
+  → OrdenStepParameterEditor（按 mode + kind 选择字段 schema）
+  → step.value YAML 片段
+  → visualToOrdenYaml
+  → Rust serde_yaml / build_filter / build_action
+```
+
+参数事实来源不是前端 preset，而是 Rust 工厂：
+
+- 动作字段：`src-tauri/src/orden/actions/mod.rs::build_action`
+- 过滤器字段：`src-tauri/src/orden/filters/mod.rs::build_filter`
+- 前端字段 schema：`src/components/settings/OrdenStepParameterEditor.tsx`
+- 默认示例：`src/components/settings/OrdenPipelineEditor.tsx::PRESETS`
+
+新增或修改 filter/action 参数时，必须同步核对这四处。类型化编辑器当前覆盖移动、复制、重命名、解压、压缩、链接、写文件、日志、Shell、废纸篓和永久删除等全部可选动作。解压使用密码候选列表 `passwords`，压缩使用单密码 `password`；密码 UI 必须遮蔽显示。
+
+短值列表统一走 `TagInput`，底层仍保存原有逗号字符串或 YAML sequence。适用范围包括配置 tags/skip-tags、规则 tags、任务 tags、extension、MIME 和其他短枚举列表。路径、命令和自由文本不要为了复用 TagInput 而强行拆分。
+
+### UI 基础设施与滚动条
+
+`docs/UI_SPEC.md` 是视觉与交互规范，`src/index.css` 是 token 和全局实现。明暗主题均通过 CSS variables 驱动，业务组件不得硬编码主题颜色。
+
+所有可滚动产品 surface 使用全局 8px 主题化滚动条：
+
+- track/corner/track-piece 透明；
+- thumb 使用 `--scrollbar-thumb`，hover 使用 `--scrollbar-thumb-hover`，active 使用 `--scrollbar-thumb-active`；
+- `:root` 的 `color-scheme` 随 light/dark 切换，避免 WebView 使用错误的系统 scrollbar；
+- Portal 内的 Menu/Select 滚动容器显式使用 `bg-popover`，透明轨道不会露出浅色宿主背景；
+- `.no-scrollbar` 只允许用于顶部紧凑导航与横向步骤轨道，且仍需支持滚轮、触控板与键盘滚动。
+
+修改滚动行为时优先改 `src/index.css` 或 `src/components/ui/` 基础组件，不要在单个业务页面复制 `::-webkit-scrollbar` 规则。
 
 ## 数据与文件存储
 
@@ -176,7 +220,9 @@ MCP 是本地 stdio JSON-RPC 服务，启动方式为 `shelfy --mcp` 或 `shelfy
 3. 修改持久化：更新 `src-tauri/src/db/` 迁移、本文存储清单与导入导出逻辑。
 4. 修改 Undo 行为：先更新“History 与撤销边界”，再改日志模型和 UI。
 5. 修改 UI 响应式策略：更新 `docs/UI_AUDIT.md` 与 `docs/ORDEN_FLOW_DESIGN.md`。
-6. 完成后至少运行：前端 `npm run build`；涉及 Rust 时在 `src-tauri/` 运行 `cargo build` 和相关 `cargo test`。
+6. 修改 Visual 参数：同步 Rust 工厂键、`OrdenStepParameterEditor` schema、`PRESETS` 和本文“Visual 参数编辑链路”。
+7. 修改全局 UI token、Portal 或滚动条：核对 `docs/UI_SPEC.md`、`src/index.css` 与 `src/components/ui/`，并验证浅色/深色。
+8. 完成后至少运行：前端 `npm run build` 与 `git diff --check`；涉及 Rust 时在 `src-tauri/` 运行 `cargo build` 和相关 `cargo test`。
 
 ## 关联文档
 

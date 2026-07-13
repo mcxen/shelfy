@@ -93,6 +93,8 @@ export default function Settings() {
     openFullDiskAccessSettings,
     installSystemKeepalive,
     uninstallSystemKeepalive,
+    checkUpdate,
+    installUpdate,
     exportRules,
     importRules,
     exportConfig,
@@ -568,8 +570,7 @@ export default function Settings() {
   };
 
   return (
-    <div className="relative flex h-full flex-col overflow-hidden rounded-xl bg-background/88 text-foreground">
-      <div aria-hidden="true" className="pointer-events-none absolute inset-0 bg-[radial-gradient(circle_at_12%_0%,color-mix(in_srgb,var(--primary)_12%,transparent),transparent_34%),radial-gradient(circle_at_88%_4%,color-mix(in_srgb,var(--accent)_42%,transparent),transparent_30%)]" />
+    <div className="relative flex h-full flex-col overflow-hidden rounded-xl bg-background text-foreground">
 
       <header className="relative z-20 shrink-0 px-4 pt-3">
         <div data-tauri-drag-region className="flex h-12 items-center gap-2 pl-20">
@@ -628,7 +629,7 @@ export default function Settings() {
       </header>
 
       {/* Content */}
-      <main className="relative z-10 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-3 [scrollbar-gutter:stable]">
+      <main className="relative z-10 min-w-0 flex-1 overflow-y-auto overscroll-contain px-4 pb-4 pt-3">
         <div className="mx-auto w-full max-w-[1280px]">
         {isMacOS && folderAccessError && (tab === "rules" || tab === "advanced") && (
           <div className="mb-3 flex items-center justify-between gap-3 rounded-xl border border-border bg-card/75 px-3 py-2 shadow-sm">
@@ -864,6 +865,8 @@ export default function Settings() {
             replaceConfigOnImport={replaceConfigOnImport}
             setReplaceConfigOnImport={setReplaceConfigOnImport}
             configToast={configToast}
+            checkUpdate={checkUpdate}
+            installUpdate={installUpdate}
           />
         )}
 

@@ -39,6 +39,7 @@ Shelfy is a quiet cross-platform backup and file organizer. It supports document
 ## Interaction
 
 - Focus states use `ring` tokens from shadcn variables.
+- Scrollable product surfaces use the token-based thin scrollbar from `src/index.css`: transparent track, rounded muted thumb, primary hover, and ring active state. Compact horizontal navigation and step rails may hide the thumb while preserving wheel, trackpad, and keyboard scrolling.
 - Icon-only controls use the local shadcn/Radix tooltip component, never browser-native `title` tooltips.
 - Folder and destination paths can be typed or selected with the platform dialog.
 - Rule editing supports priority, extension matching, optional regex pattern, destination, action, target folder scope, and enabled state.

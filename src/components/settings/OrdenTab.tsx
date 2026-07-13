@@ -16,6 +16,7 @@ import { Menu, MenuGroup, MenuGroupLabel, MenuItem, MenuPopup, MenuSeparator, Me
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "../ui/table";
+import { TagInput } from "../ui/tag-input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Braces, ChevronDown, ChevronLeft, ChevronRight, Eye, FileCheck2, History, MoreHorizontal, Pause, Pencil, Play, Plus, Save, ScanSearch, Search, StickyNote, Trash2, X } from "lucide-react";
 
@@ -300,6 +301,20 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
     }
     await ordenCheck(template.yaml);
     await ordenSave(configName, template.yaml);
+    if (template.automation) {
+      const preset = newOrdenJob(configName);
+      await ordenSaveJob({
+        ...preset,
+        name: `${configName}-schedule`,
+        mode: template.automation.mode,
+        cron_expr: template.automation.cron_expr,
+        fixed_time: template.automation.fixed_time,
+        interval_minutes: template.automation.interval_minutes,
+        watch_paths: template.automation.watch_paths,
+        path_exists: template.automation.path_exists,
+      });
+      setOrdenJobsRows(await ordenJobs());
+    }
     const visual = await ordenVisualFromYaml(template.yaml);
     setOrdenName(configName);
     setOrdenYaml(template.yaml);
@@ -308,7 +323,12 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
     setOrdenView("editor");
     await loadOrdenConfigs(configName);
     onOpenAdvanced();
-    setOrdenToast({ message: t("settings.orden.templates.addedNotice"), type: "success" });
+    setOrdenToast({
+      message: t(template.automation
+        ? "settings.orden.templates.addedWithScheduleNotice"
+        : "settings.orden.templates.addedNotice"),
+      type: "success",
+    });
     setTimeout(() => setOrdenToast(null), 3000);
   };
 
@@ -632,6 +652,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
             <div className="space-y-3">
               {ordenView === "editor" && (
                 <>
+              <div className="space-y-3 rounded-lg border border-border/80 bg-card/70 p-3 shadow-sm">
               <div className="grid gap-2 min-[900px]:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto_auto] min-[900px]:items-end">
                 <div>
                   <Label className="mb-1 block text-xs text-muted-foreground">
@@ -689,22 +710,25 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                   <Label className="mb-1 block text-xs text-muted-foreground">
                     {t("settings.orden.tags")}
                   </Label>
-                  <Input
-                    value={ordenTags}
-                    onChange={(e) => setOrdenTags(e.target.value)}
+                  <TagInput
+                    value={parseTagList(ordenTags)}
+                    onChange={(tags) => setOrdenTags(tags.join(", "))}
                     placeholder="work, invoices"
+                    ariaLabel={t("settings.orden.tags")}
                   />
                 </div>
                 <div>
                   <Label className="mb-1 block text-xs text-muted-foreground">
                     {t("settings.orden.skipTags")}
                   </Label>
-                  <Input
-                    value={ordenSkipTags}
-                    onChange={(e) => setOrdenSkipTags(e.target.value)}
+                  <TagInput
+                    value={parseTagList(ordenSkipTags)}
+                    onChange={(tags) => setOrdenSkipTags(tags.join(", "))}
                     placeholder="never"
+                    ariaLabel={t("settings.orden.skipTags")}
                   />
                 </div>
+              </div>
               </div>
                 </>
               )}
@@ -874,11 +898,11 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                   </div>}
                   <div>
                     <Label className="mb-1 block text-xs text-muted-foreground">Tags</Label>
-                    <Input value={editingOrdenJob.tags} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, tags: e.target.value })} />
+                    <TagInput value={parseTagList(editingOrdenJob.tags)} onChange={(tags) => setEditingOrdenJob({ ...editingOrdenJob, tags: tags.join(", ") })} ariaLabel={t("settings.orden.tags")} />
                   </div>
                   <div>
                     <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.skipTags")}</Label>
-                    <Input value={editingOrdenJob.skip_tags} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, skip_tags: e.target.value })} />
+                    <TagInput value={parseTagList(editingOrdenJob.skip_tags)} onChange={(tags) => setEditingOrdenJob({ ...editingOrdenJob, skip_tags: tags.join(", ") })} ariaLabel={t("settings.orden.skipTags")} />
                   </div>
                   <div>
                     <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.pathExists")}</Label>

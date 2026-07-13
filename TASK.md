@@ -40,7 +40,7 @@ src-tauri/src/orden/
     ├── trash.rs        # ✓
     ├── echo.rs         # ✓
     ├── write.rs        # ✓
-    ├── archive.rs      # extract/compress zip；密码本；删除原包/源文件 ✓
+    ├── archive.rs      # extract/compress；ZIP 内置、7z/RAR 外部命令、分卷完整性校验、成功后删除源包 ✓
     ├── symlink.rs      # ✓
     ├── hardlink.rs     # ✓
     └── shell.rs        # ✓
@@ -128,7 +128,7 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] symlink
 - [x] hardlink
 - [x] shell（std::process::Command sh -c）
-- [x] extract / compress（zip 解压/压缩、密码列表、压缩密码、删除原始文件）
+- [x] extract / compress（ZIP 解压/压缩、7z/RAR、密码列表、7z.01/7z.001 分卷完整性预检、成功后删除整组源卷）
 
 ### 阶段 3：配置与执行
 - [x] location.rs Location + 默认排除
@@ -182,6 +182,7 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] Orden Visual 重构为小卡片流程：多来源左右切换、条件/动作动态卡片轨道、选中卡片参数检查器和快捷卡片库
 - [x] Orden 流程编排增强方向连线、步骤间插入点与拖拽重排，并保留键盘可达的顺序按钮
 - [x] 模版中心重构为目标分类、流程摘要、文件影响提示和“使用后直接进入 Visual 编辑”的渐进式入口
+- [x] “完整压缩包自动解压”系统模版绑定推荐自动化：每天 08:00/14:00/20:00 扫描，使用模版时同步创建 Cron 任务
 - [x] 新增 `shelfy --mcp` / `shelfy --cli mcp` stdio MCP 服务
 - [x] MCP 写工具由独立 `mcp_allow_write` 控制
 - [ ] Visual 模式保留复杂 YAML 的 round-trip 注释/未知字段
@@ -202,6 +203,11 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] 全局 UI 主题切换为深松针绿/鼠尾草绿/暖奶油品牌色，浅深模式同步，并将基础圆角收敛到 6px
 
 ### 阶段 9：UI 审计修复
+- [x] General 设置按偏好、文件处理、自动化、AI 集成、维护重新归类，简单设置合并为紧凑横排
+- [x] 更新 `AGENTS.md` 快速定位索引与 Architecture 的 Visual 参数/UI 基础设施章节，减少后续重复检索
+- [x] 全局滚动条按 UI_SPEC 统一为明暗主题 token 绘制，覆盖页面、Portal 浮层、Select、Dialog、表格与文本域
+- [x] Orden 可视化编辑器为全部动作绘制类型化参数表单，补齐解压密码列表与压缩密码输入/显隐控制
+- [x] Orden 编辑器属性区建立独立 surface 层级；标签、跳过标签与扩展名短值改为可添加/删除的 Tag 输入
 - [x] P0 菜单浮层：Menu Portal、碰撞检测与键盘焦点
 - [x] P0 模版中心筛选：系统模版/我的模版切换时同步详情选择
 - [x] P0 模版中心完善：另存后自动进入我的模版、修复卡片嵌套交互、同步内置模版更新并补测试
@@ -225,6 +231,7 @@ Settings → Advanced 是当前图形入口，支持：
 ## 当前阻塞
 
 - 暂无编译阻塞。`cargo test` 与前端 `npm run build` 已通过。
+- 7z/RAR 与 7z 分卷依赖系统 `7z` / `7zz` / `7za`；缺少命令时任务会报错并保留全部源文件。当前开发环境未安装该命令，真实分卷命令级端到端验证需在已安装 7-Zip 的环境补做。
 - 品牌图标与主题替换已通过 `npm run build`、`cargo build`；Tray 资产哈希校验保持不变。
 - 剩余设计点：非 move/rename 的 orden 动作如何进入 Shelfy History/Undo 需要单独定义语义，避免 copy/delete/trash/shell 被现有“反向 rename”撤销逻辑误处理。
 - 已被旧版 Orden 模板写入磁盘的乱码文件名无法在不扫描和确认目标的情况下安全自动恢复；需要单独设计预览式修复工具。
@@ -240,3 +247,4 @@ Settings → Advanced 是当前图形入口，支持：
 5. 将 watcher/scheduler 的高级模式接入 orden 配置（当前 Settings/CLI/手动运行已接入）
 6. 增加端到端测试：保存配置 → sim → run → History/Undo
 7. 设计乱码路径恢复预览：仅识别可逆的旧版 UTF-8 字节 mojibake，用户确认后再重命名和修正 History
+8. 在已安装 7-Zip 的 Windows/macOS/Linux 环境验证 7z.01、7z.001 完整/缺卷、密码错误与整组源卷删除

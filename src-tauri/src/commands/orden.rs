@@ -83,7 +83,7 @@ const SYSTEM_ORDEN_TEMPLATES: &[SystemOrdenTemplate] = &[
         category_key: "settings.orden.templates.categories.automation",
         icon: "folder-archive",
         tone: "automation",
-        yaml: "rules:\n  - name: \"自动解压下载的压缩包\"\n    locations:\n      - ~/Downloads\n    filters:\n      - extension: [zip, tar, gz]\n    actions:\n      - extract:\n          dest: ~/Downloads/Unpacked/\n          delete_original: false\n",
+        yaml: "rules:\n  - name: \"完整压缩包自动解压\"\n    locations:\n      - ~/Downloads\n    subfolders: false\n    filter_mode: any\n    filters:\n      - extension: [zip, 7z, rar]\n      - regex: '(?i)\\.7z\\.0*1$'\n    actions:\n      - extract:\n          dest: ~/Downloads/Unpacked/\n          format: auto\n          delete_original: true\n          on_conflict: rename_new\n",
     },
     SystemOrdenTemplate {
         id: "backup-pdfs",
@@ -116,6 +116,31 @@ pub struct OrdenTemplateInfo {
     category_key: Option<String>,
     icon: String,
     tone: String,
+    automation: Option<OrdenTemplateAutomation>,
+}
+
+#[derive(serde::Serialize, serde::Deserialize, Clone)]
+pub struct OrdenTemplateAutomation {
+    mode: String,
+    cron_expr: Option<String>,
+    fixed_time: Option<String>,
+    interval_minutes: i64,
+    watch_paths: String,
+    path_exists: Option<String>,
+}
+
+fn system_template_automation(name: &str) -> Option<OrdenTemplateAutomation> {
+    match name {
+        "extract-downloads" => Some(OrdenTemplateAutomation {
+            mode: "cron".to_string(),
+            cron_expr: Some("0 8,14,20 * * *".to_string()),
+            fixed_time: None,
+            interval_minutes: 60,
+            watch_paths: "~/Downloads".to_string(),
+            path_exists: Some("~/Downloads".to_string()),
+        }),
+        _ => None,
+    }
 }
 
 fn ensure_orden_templates(data_dir: &std::path::Path) -> Result<(), String> {
@@ -293,6 +318,7 @@ pub fn orden_template_list_cmd() -> Result<Vec<OrdenTemplateInfo>, String> {
                 category_key: Some(system.category_key.to_string()),
                 icon: system.icon.to_string(),
                 tone: system.tone.to_string(),
+                automation: system_template_automation(system.id),
             });
         } else {
             templates.push(OrdenTemplateInfo {
@@ -305,6 +331,7 @@ pub fn orden_template_list_cmd() -> Result<Vec<OrdenTemplateInfo>, String> {
                 category_key: None,
                 icon: "sparkles".to_string(),
                 tone: "custom".to_string(),
+                automation: None,
             });
         }
     }
@@ -873,6 +900,20 @@ mod tests {
             "custom"
         );
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn extract_template_is_valid_and_scheduled_three_times_daily() {
+        let template = find_system_template("extract-downloads").unwrap();
+        crate::orden::Config::from_string(template.yaml).unwrap();
+        assert!(template.yaml.contains("(?i)\\.7z\\.0*1$"));
+        assert!(template.yaml.contains("delete_original: true"));
+
+        let automation = system_template_automation(template.id).unwrap();
+        assert_eq!(automation.mode, "cron");
+        assert_eq!(automation.cron_expr.as_deref(), Some("0 8,14,20 * * *"));
+        crate::scheduler::validate_cron_expression(automation.cron_expr.as_deref().unwrap())
+            .unwrap();
     }
 
     #[test]

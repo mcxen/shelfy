@@ -119,6 +119,17 @@ export interface SystemKeepaliveStatus {
   platform: string;
 }
 
+export interface UpdateInfo {
+  current_version: string;
+  latest_version: string;
+  available: boolean;
+  release_name: string;
+  release_notes: string;
+  published_at: string | null;
+  asset_name: string | null;
+  asset_url: string | null;
+}
+
 export interface FolderAccessStatus {
   path: string;
   exists: boolean;
@@ -249,6 +260,16 @@ export interface OrdenTemplate {
   category_key: string | null;
   icon: string;
   tone: string;
+  automation: OrdenTemplateAutomation | null;
+}
+
+export interface OrdenTemplateAutomation {
+  mode: 'cron' | 'fixed' | 'interval';
+  cron_expr: string | null;
+  fixed_time: string | null;
+  interval_minutes: number;
+  watch_paths: string;
+  path_exists: string | null;
 }
 
 // Orden tasks poll the backend for completion. If a file operation hangs
@@ -346,6 +367,8 @@ interface AppState {
   openFullDiskAccessSettings: () => Promise<void>;
   installSystemKeepalive: (intervalMinutes: number) => Promise<void>;
   uninstallSystemKeepalive: () => Promise<void>;
+  checkUpdate: () => Promise<UpdateInfo>;
+  installUpdate: (info: UpdateInfo) => Promise<void>;
   exportRules: (path: string) => Promise<void>;
   importRules: (path: string, replace: boolean) => Promise<number>;
   exportConfig: (path: string) => Promise<void>;
@@ -578,6 +601,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   uninstallSystemKeepalive: async () => {
     await invoke('uninstall_system_keepalive_cmd');
+  },
+
+  checkUpdate: async () => {
+    return await invoke<UpdateInfo>('check_update_cmd');
+  },
+
+  installUpdate: async (info) => {
+    await invoke('install_update_cmd', { info });
   },
 
   exportRules: async (path) => {

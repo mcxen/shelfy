@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Activity, Bot, Copy, Download, FileCheck2, Save, ServerCog, SlidersHorizontal, Upload, X } from "lucide-react";
-import { AppSettings, McpClientConfig, ScheduleSettings, SchedulerLog } from "../../store/useAppStore";
+import { Activity, Bot, Copy, Download, FileCheck2, RefreshCw, Rocket, Save, ServerCog, SlidersHorizontal, Upload, X } from "lucide-react";
+import { AppSettings, McpClientConfig, ScheduleSettings, SchedulerLog, UpdateInfo } from "../../store/useAppStore";
 import { AnimatedIcon } from "../ui/animated-icon";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
@@ -61,6 +62,8 @@ interface GeneralTabProps {
   replaceConfigOnImport: boolean;
   setReplaceConfigOnImport: (replace: boolean) => void;
   configToast: Toast;
+  checkUpdate: () => Promise<UpdateInfo>;
+  installUpdate: (info: UpdateInfo) => Promise<void>;
 }
 
 export function GeneralTab({
@@ -99,19 +102,53 @@ export function GeneralTab({
   replaceConfigOnImport,
   setReplaceConfigOnImport,
   configToast,
+  checkUpdate,
+  installUpdate,
 }: GeneralTabProps) {
   const { t } = useTranslation();
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
+  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateError, setUpdateError] = useState<string | null>(null);
+
+  const handleCheckUpdate = async () => {
+    setUpdateBusy(true);
+    setUpdateError(null);
+    try {
+      setUpdateInfo(await checkUpdate());
+    } catch (error) {
+      setUpdateError(String(error));
+    } finally {
+      setUpdateBusy(false);
+    }
+  };
+
+  const handleInstallUpdate = async () => {
+    if (!updateInfo) return;
+    setUpdateBusy(true);
+    setUpdateError(null);
+    try {
+      await installUpdate(updateInfo);
+    } catch (error) {
+      setUpdateError(String(error));
+      setUpdateBusy(false);
+    }
+  };
 
   return (
-    <div className="w-full space-y-3">
-      <Card className="grid gap-x-4 gap-y-2.5 p-3 md:grid-cols-[18rem_18rem] lg:grid-cols-[20rem_20rem]">
-        <div className="md:col-span-2">
-          <h2 className="text-lg font-semibold">{t("settings.general.title")}</h2>
-        </div>
-        <div>
-          <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.general.language")}</Label>
+    <div className="flex w-full flex-col gap-3">
+      <Card className="space-y-4 p-3">
+        <h2 className="text-lg font-semibold">{t("settings.general.title")}</h2>
+
+        <section className="space-y-2">
+          <div>
+            <h3 className="text-sm font-semibold">{t("settings.general.preferences", { defaultValue: "Preferences" })}</h3>
+            <p className="text-xs text-muted-foreground">{t("settings.general.preferencesDesc", { defaultValue: "Language, appearance, and startup behavior." })}</p>
+          </div>
+          <div className="grid gap-2 md:grid-cols-3">
+        <div className="min-w-0">
+          <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.general.language")}</Label>
           <Select value={settings?.language || "en"} onValueChange={handleChangeLanguage}>
-            <SelectTrigger className="w-full md:max-w-80">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -126,10 +163,10 @@ export function GeneralTab({
             </SelectContent>
           </Select>
         </div>
-        <div>
-          <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.general.theme")}</Label>
+        <div className="min-w-0">
+          <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.general.theme")}</Label>
           <Select value={settings?.theme || "system"} onValueChange={(value) => settings && saveSettings({ ...settings, theme: value })}>
-            <SelectTrigger className="w-full md:max-w-80">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -139,18 +176,26 @@ export function GeneralTab({
             </SelectContent>
           </Select>
         </div>
-        <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/25 px-3 py-2 md:col-span-2">
-          <Label className="text-sm text-muted-foreground">{t("settings.general.startWithSystem")}</Label>
+        <div className="flex min-h-9 items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3">
+          <Label className="text-sm">{t("settings.general.startWithSystem")}</Label>
           <Switch checked={settings?.autostart || false} onCheckedChange={(checked) => setAutostart(checked)} />
         </div>
+          </div>
+        </section>
 
-        <div className="space-y-2 md:col-span-2">
+        <section className="space-y-2 border-t border-border/70 pt-3">
+          <div>
+            <h3 className="text-sm font-semibold">{t("settings.general.fileHandling", { defaultValue: "File handling" })}</h3>
+            <p className="text-xs text-muted-foreground">{t("settings.general.fileHandlingDesc", { defaultValue: "Control when files are processed and how busy files are handled." })}</p>
+          </div>
+          <div className="grid gap-2 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,.65fr)]">
+        <div className="space-y-2 rounded-lg border border-border/60 bg-muted/15 p-2.5">
           <div className="flex items-center justify-between">
-            <Label className="text-sm text-muted-foreground">{t("settings.general.gracePeriod")}</Label>
+            <Label className="text-sm font-medium">{t("settings.general.gracePeriod")}</Label>
             <span className="text-xs text-muted-foreground">{formatDuration(currentGraceSeconds)}</span>
           </div>
           <Slider min={0} max={graceSteps.length - 1} step={1} value={[sliderIndex]} onValueChange={([value]) => handleGraceSliderChange(value)} />
-          <div className="grid max-w-md grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
+          <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
             <Input
               type="number"
               min={0}
@@ -173,9 +218,9 @@ export function GeneralTab({
           <p className="text-xs text-muted-foreground">{t("settings.general.gracePeriodDesc")}</p>
         </div>
 
-        <div className="flex items-center justify-between rounded-lg border border-border/60 bg-muted/25 px-3 py-2 md:col-span-2">
+        <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/15 p-2.5">
           <div>
-            <Label className="text-sm text-muted-foreground">{t("settings.general.checkFileLock")}</Label>
+            <Label className="text-sm font-medium">{t("settings.general.checkFileLock")}</Label>
             <p className="text-xs text-muted-foreground">{t("settings.general.checkFileLockDesc")}</p>
           </div>
           <Switch
@@ -186,26 +231,74 @@ export function GeneralTab({
             }}
           />
         </div>
+          </div>
+        </section>
       </Card>
 
-      <Card className="space-y-2.5 p-3">
-        <div>
+      <Card className="order-5 space-y-3 p-3">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="flex items-center gap-2 text-base font-semibold">
+              <Rocket size={16} className="text-primary" />
+              {t("settings.general.updates", { defaultValue: "Application updates" })}
+            </h3>
+            <p className="text-xs text-muted-foreground">{t("settings.general.updatesDesc", { defaultValue: "Check for new releases and install compatible updates." })}</p>
+          </div>
+          <Button onClick={handleCheckUpdate} variant="outline" size="sm" disabled={updateBusy}>
+            <RefreshCw size={14} className={updateBusy ? "animate-spin" : ""} />
+            {updateBusy ? t("settings.general.checkingUpdates", { defaultValue: "Checking…" }) : t("settings.general.checkUpdates", { defaultValue: "Check for updates" })}
+          </Button>
+        </div>
+        <div className="grid gap-2 text-xs sm:grid-cols-2">
+          <div className="rounded-lg border border-border/60 bg-muted/25 px-3 py-2">
+            <span className="text-muted-foreground">{t("settings.general.currentVersion", { defaultValue: "Current version" })}</span>
+            <div className="mt-0.5 font-medium">{updateInfo?.current_version || "0.2.2"}</div>
+          </div>
+          <div className="rounded-lg border border-border/60 bg-muted/25 px-3 py-2">
+            <span className="text-muted-foreground">{t("settings.general.latestRelease", { defaultValue: "Latest release" })}</span>
+            <div className="mt-0.5 font-medium">{updateInfo?.latest_version || t("settings.general.notChecked", { defaultValue: "Not checked" })}</div>
+          </div>
+        </div>
+        {updateInfo && (
+          <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-sm">
+            <div className="flex items-center justify-between gap-2">
+              <div>
+                <div className="font-medium">{updateInfo.release_name}</div>
+                <div className="text-xs text-muted-foreground">{updateInfo.available ? `Compatible asset: ${updateInfo.asset_name || "not found"}` : "Shelfy is up to date."}</div>
+              </div>
+              {updateInfo.available && updateInfo.asset_url && (
+                <Button onClick={handleInstallUpdate} disabled={updateBusy}>
+                  <Download size={14} />
+                  {t("settings.general.installUpdate", { defaultValue: "Download, install & restart" })}
+                </Button>
+              )}
+            </div>
+            {updateInfo.release_notes && <p className="max-h-24 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{updateInfo.release_notes}</p>}
+          </div>
+        )}
+        {updateError && <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">{updateError}</div>}
+      </Card>
+
+      <Card className="order-2 space-y-2.5 p-3">
+        <div className="flex items-center justify-between gap-3">
+          <div>
           <h3 className="flex items-center gap-2 text-base font-semibold">
             <SlidersHorizontal size={16} className="text-primary" />
             {t("settings.scheduler.title")}
           </h3>
           <p className="text-xs text-muted-foreground">{t("settings.scheduler.desc")}</p>
-        </div>
-
-        <div className="flex max-w-3xl items-center justify-between rounded-lg border border-border/70 bg-muted/20 px-3 py-2">
-          <Label className="text-sm text-muted-foreground">{t("settings.scheduler.enable")}</Label>
+          </div>
+          <Label className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
+          <span>{t("settings.scheduler.enable")}</span>
           <Switch checked={localSchedule.schedule_enabled} onCheckedChange={(checked) => handleScheduleChange({ schedule_enabled: checked })} />
+          </Label>
         </div>
 
+        <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/10 p-2.5 lg:grid-cols-[12rem_minmax(0,1fr)] lg:items-end">
         <div>
-          <Label className="mb-2 block text-sm text-muted-foreground">{t("settings.scheduler.timesPerDay")}</Label>
+          <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.scheduler.timesPerDay")}</Label>
           <Select value={String(localSchedule.schedule_times_per_day)} onValueChange={(value) => handleScheduleChange({ schedule_times_per_day: parseInt(value, 10) })}>
-            <SelectTrigger className="w-full sm:w-72">
+            <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -217,7 +310,7 @@ export function GeneralTab({
           </Select>
         </div>
 
-        <div className="grid max-w-3xl gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: localSchedule.schedule_times_per_day }).map((_, idx) => {
             const key = `schedule_time_${idx + 1}` as keyof ScheduleSettings;
             return (
@@ -232,8 +325,10 @@ export function GeneralTab({
             );
           })}
         </div>
+        </div>
 
-        <section className="max-w-4xl space-y-2.5 rounded-lg border border-border/70 bg-muted/15 p-2.5">
+        <div className="grid gap-3 xl:grid-cols-2">
+        <section className="space-y-2.5 rounded-lg border border-border/70 bg-muted/15 p-2.5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <Label className="text-sm text-muted-foreground">{t("settings.scheduler.cronEnable")}</Label>
@@ -241,7 +336,7 @@ export function GeneralTab({
             </div>
             <Switch checked={localSchedule.schedule_cron_enabled} onCheckedChange={(checked) => handleScheduleChange({ schedule_cron_enabled: checked })} />
           </div>
-          <div className="grid max-w-3xl gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
+          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
             <div className="flex-1">
               <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.scheduler.cronExpression")}</Label>
               <Input
@@ -258,7 +353,7 @@ export function GeneralTab({
           </div>
         </section>
 
-        <section className="max-w-4xl space-y-2.5 rounded-lg border border-border/70 bg-muted/15 p-2.5">
+        <section className="space-y-2.5 rounded-lg border border-border/70 bg-muted/15 p-2.5">
           <div className="flex items-center justify-between gap-3">
             <div>
               <Label className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -291,6 +386,7 @@ export function GeneralTab({
           </div>
           {!systemKeepaliveSupported && <p className="text-xs text-muted-foreground">{t("settings.scheduler.keepaliveUnsupported")}</p>}
         </section>
+        </div>
 
         {scheduleToast && (
           <div
@@ -335,7 +431,7 @@ export function GeneralTab({
         </div>
       </Card>
 
-      <Card className="space-y-2.5 p-3">
+      <Card className="order-3 space-y-2.5 p-3">
         <div>
           <h3 className="flex items-center gap-2 text-base font-semibold">
             <Bot size={16} className="text-primary" />
@@ -434,7 +530,12 @@ export function GeneralTab({
         </div>
       </Card>
 
-      <Card className="space-y-2.5 p-3">
+      <div className="order-4 px-0.5 pt-1">
+        <h2 className="text-sm font-semibold">{t("settings.general.maintenance", { defaultValue: "Maintenance" })}</h2>
+        <p className="text-xs text-muted-foreground">{t("settings.general.maintenanceDesc", { defaultValue: "Updates, backup, and configuration migration." })}</p>
+      </div>
+
+      <Card className="order-5 space-y-2.5 p-3">
         <div>
           <h3 className="text-base font-semibold">{t("settings.config.title")}</h3>
           <p className="text-xs text-muted-foreground">{t("settings.config.desc")}</p>

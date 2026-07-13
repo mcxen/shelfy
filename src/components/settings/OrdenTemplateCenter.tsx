@@ -4,6 +4,7 @@ import {
   Archive,
   ArrowRight,
   Braces,
+  Clock3,
   Copy,
   FileInput,
   FileText,
@@ -102,6 +103,7 @@ type TemplateFlowSummary = {
   filters: string[];
   actions: string[];
   safety: SafetyLevel;
+  deletesOriginal: boolean;
 };
 
 function scalar(value: string): string {
@@ -144,6 +146,7 @@ function parseTemplateFlow(yaml: string): TemplateFlowSummary {
   const actions = Array.from(new Set(stepKinds("actions")));
   const destructive = actions.some((action) => ["delete", "trash", "shell"].includes(action));
   const changes = actions.some((action) => ["move", "rename", "write", "extract", "compress", "archive", "unarchive"].includes(action));
+  const deletesOriginal = /\bdelete_original\s*:\s*true\b/i.test(yaml);
 
   return {
     ruleCount: Math.max((yaml.match(/^\s*-\s+name:/gm) || []).length, 1),
@@ -151,6 +154,7 @@ function parseTemplateFlow(yaml: string): TemplateFlowSummary {
     filters,
     actions,
     safety: destructive ? "destructive" : changes ? "changes" : "keeps",
+    deletesOriginal,
   };
 }
 
@@ -249,7 +253,9 @@ export function OrdenTemplateCenter({
     try {
       const yaml = template.id === selectedId ? (draftYaml || template.yaml) : template.yaml;
       await onUseTemplate({ ...template, yaml });
-      setNotice(t("settings.orden.templates.addedNotice"));
+      setNotice(t(template.automation
+        ? "settings.orden.templates.addedWithScheduleNotice"
+        : "settings.orden.templates.addedNotice"));
     } catch (error) {
       setNotice(String(error || t("settings.orden.templates.addError")));
     } finally {
@@ -395,12 +401,13 @@ export function OrdenTemplateCenter({
                     <div className="pointer-events-none relative z-[1] flex min-h-39 flex-col p-2.5 text-foreground">
                       <div className="flex items-start justify-between gap-3">
                         <div className={cn("flex size-9 items-center justify-center rounded-lg", tone.icon)}>{renderIcon(template, "size-4")}</div>
-                        <Button type="button" size="icon-sm" variant="ghost" className="pointer-events-auto relative z-10 bg-background/70 text-foreground hover:bg-background" onClick={() => void handleUse(template)} disabled={busyId === template.id} aria-label={t("settings.orden.templates.addToOrden")}><Plus /></Button>
+                        <Button type="button" size="icon-sm" variant="ghost" className="pointer-events-auto relative z-10 bg-background/70 text-foreground hover:bg-background" onClick={() => void handleUse(template)} disabled={busyId === template.id} aria-label={t(template.automation ? "settings.orden.templates.useWithSchedule" : "settings.orden.templates.addToOrden")}><Plus /></Button>
                       </div>
                       <div className="mt-2.5"><div className="text-[10px] font-medium uppercase tracking-[0.12em] text-muted-foreground">{templateCategory(template, t)}</div><h3 className="mt-0.5 text-sm font-semibold leading-tight">{label}</h3><p className="mt-1 line-clamp-2 text-xs text-muted-foreground">{templateDescription(template, t)}</p></div>
                       <div className="mt-auto flex items-center gap-1.5 pt-2.5 text-[10px] text-muted-foreground">
                         <span className="max-w-20 truncate">{compactList(summary.sources, "—")}</span><ArrowRight className="size-3 shrink-0" /><span className="max-w-16 truncate">{compactList(summary.filters, t("settings.orden.noFilter"))}</span><ArrowRight className="size-3 shrink-0" /><span className="max-w-16 truncate">{compactList(summary.actions, "—")}</span>
                       </div>
+                      {template.automation && <div className="mt-1.5 flex items-center gap-1 text-[10px] font-medium text-primary"><Clock3 className="size-3" />{t("settings.orden.templates.scheduleThreeTimes")}</div>}
                     </div>
                   </article>
                 );
@@ -418,7 +425,7 @@ export function OrdenTemplateCenter({
               <div className="p-3">
                 <div className="flex items-start gap-3">
                   <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg", selectedTone.icon)}>{renderIcon(selectedTemplate, "size-5")}</div>
-                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline">{templateCategory(selectedTemplate, t)}</Badge><Badge variant={selectedSummary.safety === "destructive" ? "destructive" : "secondary"}>{safetyLabel(selectedSummary.safety)}</Badge></div><h3 className="mt-2 text-base font-semibold">{templateLabel(selectedTemplate, t)}</h3><p className="mt-1 text-xs text-muted-foreground">{templateDescription(selectedTemplate, t)}</p></div>
+                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline">{templateCategory(selectedTemplate, t)}</Badge><Badge variant={selectedSummary.safety === "destructive" ? "destructive" : "secondary"}>{safetyLabel(selectedSummary.safety)}</Badge>{selectedSummary.deletesOriginal && <Badge variant="destructive">{t("settings.orden.templates.deletesOriginal")}</Badge>}</div><h3 className="mt-2 text-base font-semibold">{templateLabel(selectedTemplate, t)}</h3><p className="mt-1 text-xs text-muted-foreground">{templateDescription(selectedTemplate, t)}</p></div>
                 </div>
 
                 <div className="mt-3 space-y-1.5">
@@ -427,6 +434,7 @@ export function OrdenTemplateCenter({
                   <div className="rounded-lg border border-border bg-background p-2.5"><div className="flex items-center gap-2 text-xs font-semibold"><Filter className="size-3.5 text-primary" />{t("settings.orden.workflow.conditions", { defaultValue: "Conditions" })}</div><div className="mt-1 text-[10px] text-muted-foreground">{compactList(selectedSummary.filters, t("settings.orden.workflow.matchEverything", { defaultValue: "Match everything" }))}</div></div>
                   <div className="ml-5 h-2 border-l border-dashed border-border" />
                   <div className="rounded-lg border border-border bg-background p-2.5"><div className="flex items-center gap-2 text-xs font-semibold"><WandSparkles className="size-3.5 text-primary" />{t("settings.orden.workflow.actions", { defaultValue: "Actions" })}</div><div className="mt-1 text-[10px] text-muted-foreground">{compactList(selectedSummary.actions, "—")}</div></div>
+                  {selectedTemplate.automation && <><div className="ml-5 h-2 border-l border-dashed border-border" /><div className="rounded-lg border border-primary/25 bg-primary/8 p-2.5"><div className="flex items-center gap-2 text-xs font-semibold"><Clock3 className="size-3.5 text-primary" />{t("settings.orden.templates.scheduleTitle")}</div><div className="mt-1 text-[10px] text-muted-foreground">{t("settings.orden.templates.scheduleThreeTimes")} · <span className="font-mono">{selectedTemplate.automation.cron_expr}</span></div></div></>}
                 </div>
 
                 <div className="mt-3 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/8 p-2.5 text-xs text-muted-foreground">
@@ -434,7 +442,7 @@ export function OrdenTemplateCenter({
                   <span>{t("settings.orden.templates.summary", { defaultValue: "{{rules}} rule(s), {{sources}} source(s), {{steps}} total steps.", rules: selectedSummary.ruleCount, sources: selectedSummary.sources.length, steps: selectedSummary.filters.length + selectedSummary.actions.length })}</span>
                 </div>
 
-                <Button type="button" className="mt-3 w-full" onClick={() => void handleUse(selectedTemplate)} disabled={busyId === selectedTemplate.id}><Plus />{t("settings.orden.templates.useAndCustomize", { defaultValue: "Use and customize" })}</Button>
+                <Button type="button" className="mt-3 w-full" onClick={() => void handleUse(selectedTemplate)} disabled={busyId === selectedTemplate.id}><Plus />{t(selectedTemplate.automation ? "settings.orden.templates.useWithSchedule" : "settings.orden.templates.useAndCustomize", { defaultValue: "Use and customize" })}</Button>
 
                 <details className="mt-3 rounded-lg border border-border bg-muted/15">
                   <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-muted-foreground">{t("settings.orden.templates.advanced", { defaultValue: "Advanced template options" })}</summary>

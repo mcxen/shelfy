@@ -347,7 +347,10 @@ fn expand_env(s: &str) -> String {
                 continue;
             }
         }
-        let c = s[i..].chars().next().expect("valid UTF-8 character boundary");
+        let c = s[i..]
+            .chars()
+            .next()
+            .expect("valid UTF-8 character boundary");
         out.push(c);
         i += c.len_utf8();
     }

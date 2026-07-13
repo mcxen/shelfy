@@ -10,6 +10,7 @@ pub mod orden_runtime;
 pub mod rules;
 pub mod scheduler;
 pub mod tray;
+pub mod updater;
 pub mod watcher;
 
 use commands::*;
@@ -206,10 +207,23 @@ pub fn run() {
             orden_save_job_cmd,
             orden_delete_job_cmd,
             orden_run_job_cmd,
+            check_update_cmd,
+            install_update_cmd,
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
+            if let tauri::RunEvent::WindowEvent { label, event, .. } = &event {
+                if label == "settings" {
+                    if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                        api.prevent_close();
+                        if let Some(window) = app.get_webview_window(label) {
+                            let _ = window.hide();
+                        }
+                    }
+                }
+            }
+
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
                 tray::show_settings_window(app);

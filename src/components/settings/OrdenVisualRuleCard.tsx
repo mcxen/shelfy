@@ -21,6 +21,7 @@ import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { Switch } from "../ui/switch";
+import { TagInput } from "../ui/tag-input";
 import { OrdenPipelineEditor } from "./OrdenPipelineEditor";
 
 interface OrdenVisualRuleCardProps {
@@ -97,7 +98,7 @@ export function OrdenVisualRuleCard({
           </div>
           <div className="md:col-span-2 xl:col-span-1">
             <Label htmlFor={fieldId("tags")} className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.tags")}</Label>
-            <Input id={fieldId("tags")} value={rule.tags} onChange={(event) => onUpdate(rule.id, { tags: event.target.value })} placeholder="backup, docs" />
+            <TagInput value={rule.tags.split(",").map((tag) => tag.trim()).filter(Boolean)} onChange={(tags) => onUpdate(rule.id, { tags: tags.join(", ") })} placeholder="backup, docs" ariaLabel={t("settings.orden.tags")} />
           </div>
         </div>
 

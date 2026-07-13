@@ -46,6 +46,7 @@ import {
   MenuTrigger,
 } from "../ui/menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
+import { OrdenStepParameterEditor, supportsStepParameterEditor } from "./OrdenStepParameterEditor";
 
 type StepDefinition = {
   kind: string;
@@ -422,7 +423,10 @@ export function OrdenPipelineEditor({
               </div>
               <div className="space-y-2 px-2.5 py-2.5">
                 <p className="text-xs text-muted-foreground">{translated(selectedDefinition, "hint")}</p>
-                <textarea value={selectedStep.value} onChange={(event) => update(selectedStep.id, { value: event.target.value })} placeholder={t("settings.orden.pipelineValuePlaceholder")} className="min-h-16 w-full resize-y rounded-md border border-input bg-card px-2.5 py-2 font-mono text-xs leading-5 text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20" aria-label={`${translated(selectedDefinition, "label")} · ${t("settings.orden.pipelineValue")}`} />
+                <OrdenStepParameterEditor mode={mode} kind={selectedStep.kind} value={selectedStep.value} onChange={(value) => update(selectedStep.id, { value })} label={(key) => t(`settings.orden.workflow.params.${key}`, { defaultValue: key.replace(/_/g, " ") })} />
+                {!supportsStepParameterEditor(mode, selectedStep.kind) && (
+                  <textarea value={selectedStep.value} onChange={(event) => update(selectedStep.id, { value: event.target.value })} placeholder={t("settings.orden.pipelineValuePlaceholder")} className="min-h-16 w-full resize-y rounded-md border border-input bg-card px-2.5 py-2 font-mono text-xs leading-5 text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20" aria-label={`${translated(selectedDefinition, "label")} · ${t("settings.orden.pipelineValue")}`} />
+                )}
                 {mode === "filter" && <Label className="flex w-fit items-center gap-2 text-xs text-muted-foreground"><Checkbox checked={selectedStep.inverted} onCheckedChange={(checked) => update(selectedStep.id, { inverted: checked === true })} />{t("settings.orden.invertFilter")}</Label>}
               </div>
             </div>

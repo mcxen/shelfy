@@ -1,6 +1,6 @@
 use std::fs;
 use std::io::{Read, Write};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use crate::orden::action::{DefaultOutput, Level, Output};
 use crate::orden::conflict::{resolve_conflict, ConflictMode};
@@ -32,6 +32,9 @@ impl ArchiveFormat {
         if configured != Self::Auto {
             return Ok(configured);
         }
+        if seven_zip_volume(path).is_some() {
+            return Ok(Self::SevenZip);
+        }
         match path
             .extension()
             .and_then(|s| s.to_str())
@@ -57,8 +60,8 @@ impl ArchiveFormat {
     }
 }
 
-/// Extract an archive. Currently supports ZIP, including encrypted ZIP entries
-/// through a configured password list.
+/// Extract an archive. ZIP is handled in process; 7z and RAR use an installed
+/// 7z-compatible command. Archives are tested before extraction.
 pub struct ExtractArchive {
     pub dest: String,
     pub format: ArchiveFormat,
@@ -143,27 +146,29 @@ impl Action for ExtractArchive {
         if !src.is_file() {
             return Err("extract: source must be a file".into());
         }
-        let src_name = src
-            .file_stem()
-            .or_else(|| src.file_name())
-            .map(|n| n.to_string_lossy().to_string())
-            .ok_or("extract: source has no filename")?;
+        let src_name = archive_stem(&src).ok_or("extract: source has no filename")?;
         let dest_rendered = template::render(&self.dest, &res.dict())?;
         let dest =
             prepare_target_path(&src_name, &dest_rendered, self.autodetect_folder, simulate)?;
         let format = ArchiveFormat::detect_for_extract(&src, self.format)?;
+        let source_files = archive_source_files(&src, format)?;
 
         match format {
-            ArchiveFormat::Zip => extract_zip(
-                &src,
-                &dest,
-                &self.passwords,
-                self.on_conflict,
-                &self.rename_template,
-                res,
-                output,
-                simulate,
-            )?,
+            ArchiveFormat::Zip => {
+                if !simulate {
+                    test_zip(&src, &self.passwords)?;
+                }
+                extract_zip(
+                    &src,
+                    &dest,
+                    &self.passwords,
+                    self.on_conflict,
+                    &self.rename_template,
+                    res,
+                    output,
+                    simulate,
+                )?
+            }
             ArchiveFormat::SevenZip | ArchiveFormat::Rar => {
                 extract_with_7z(&src, &dest, &self.passwords, res, output, simulate)?
             }
@@ -178,14 +183,16 @@ impl Action for ExtractArchive {
         );
 
         if self.delete_original {
-            output.msg(
-                res,
-                &format!("Deleting original archive {}", src.display()),
-                "extract",
-                Level::Info,
-            );
-            if !simulate {
-                fs::remove_file(&src).map_err(|e| e.to_string())?;
+            for source_file in source_files {
+                output.msg(
+                    res,
+                    &format!("Deleting original archive {}", source_file.display()),
+                    "extract",
+                    Level::Info,
+                );
+                if !simulate {
+                    fs::remove_file(&source_file).map_err(|e| e.to_string())?;
+                }
             }
             res.path = Some(dest);
         }
@@ -392,6 +399,31 @@ fn open_zip_entry<'a, R: Read + std::io::Seek>(
     }
 }
 
+fn test_zip(src: &Path, passwords: &[String]) -> Result<(), String> {
+    let f = fs::File::open(src).map_err(|e| e.to_string())?;
+    let mut archive = zip::ZipArchive::new(f).map_err(|e| e.to_string())?;
+    for index in 0..archive.len() {
+        let encrypted = archive
+            .by_index_raw(index)
+            .map(|file| file.encrypted())
+            .map_err(|e| e.to_string())?;
+        let password = if encrypted {
+            Some(choose_zip_password(src, index, passwords)?)
+        } else {
+            None
+        };
+        let mut entry = open_zip_entry(&mut archive, index, password.as_deref())?;
+        std::io::copy(&mut entry, &mut std::io::sink()).map_err(|e| {
+            format!(
+                "extract: archive integrity check failed for entry {}: {}",
+                entry.name(),
+                e
+            )
+        })?;
+    }
+    Ok(())
+}
+
 fn choose_zip_password(src: &Path, index: usize, passwords: &[String]) -> Result<String, String> {
     if passwords.is_empty() {
         return Err(format!("extract: entry {} requires a password", index));
@@ -437,12 +469,13 @@ fn run_7z_command(
     })?;
     output.msg(
         res,
-        &format!("Running {} {}", cmd, args.join(" ")),
+        &format!("Running {} {}", cmd, display_7z_args(args)),
         sender,
         Level::Info,
     );
     let out = std::process::Command::new(cmd)
         .args(args)
+        .stdin(std::process::Stdio::null())
         .output()
         .map_err(|e| e.to_string())?;
     for line in String::from_utf8_lossy(&out.stdout)
@@ -464,6 +497,19 @@ fn run_7z_command(
     }
 }
 
+fn display_7z_args(args: &[String]) -> String {
+    args.iter()
+        .map(|arg| {
+            if arg.starts_with("-p") && arg.len() > 2 {
+                "-p********".to_string()
+            } else {
+                arg.clone()
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn extract_with_7z(
     src: &Path,
     dest: &Path,
@@ -481,33 +527,122 @@ fn extract_with_7z(
     if simulate {
         return Ok(());
     }
-    fs::create_dir_all(dest).map_err(|e| e.to_string())?;
-    let mut candidates = if passwords.is_empty() {
+    let candidates = if passwords.is_empty() {
         vec![String::new()]
     } else {
-        passwords.to_vec()
+        let mut candidates = passwords.to_vec();
+        if !candidates.iter().any(|password| password.is_empty()) {
+            candidates.push(String::new());
+        }
+        candidates
     };
-    if !candidates.iter().any(|p| p.is_empty()) {
-        candidates.push(String::new());
-    }
 
     let mut last_err = None;
-    for password in candidates {
-        let mut args = vec![
-            "x".to_string(),
-            "-y".to_string(),
-            format!("-o{}", dest.display()),
-        ];
+    let mut verified_password = None;
+    for password in &candidates {
+        let mut args = vec!["t".to_string(), "-y".to_string()];
         if !password.is_empty() {
             args.push(format!("-p{}", password));
         }
         args.push(src.to_string_lossy().to_string());
-        match run_7z_command(&args, res, output, "extract") {
-            Ok(()) => return Ok(()),
+        match run_7z_command(&args, res, output, "archive-test") {
+            Ok(()) => {
+                verified_password = Some(password.clone());
+                break;
+            }
             Err(e) => last_err = Some(e),
         }
     }
-    Err(last_err.unwrap_or_else(|| "extract: no 7z password candidate worked".to_string()))
+    let password = verified_password.ok_or_else(|| {
+        last_err
+            .unwrap_or_else(|| "extract: archive is incomplete or no password worked".to_string())
+    })?;
+
+    fs::create_dir_all(dest).map_err(|e| e.to_string())?;
+    let mut args = vec![
+        "x".to_string(),
+        "-y".to_string(),
+        format!("-o{}", dest.display()),
+    ];
+    if !password.is_empty() {
+        args.push(format!("-p{}", password));
+    }
+    args.push(src.to_string_lossy().to_string());
+    run_7z_command(&args, res, output, "extract")
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct SevenZipVolume {
+    prefix: String,
+    part: u64,
+    width: usize,
+}
+
+fn seven_zip_volume(path: &Path) -> Option<SevenZipVolume> {
+    let name = path.file_name()?.to_str()?;
+    let (prefix, suffix) = name.rsplit_once('.')?;
+    if !prefix.to_ascii_lowercase().ends_with(".7z")
+        || suffix.is_empty()
+        || !suffix.bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    Some(SevenZipVolume {
+        prefix: prefix.to_string(),
+        part: suffix.parse().ok()?,
+        width: suffix.len(),
+    })
+}
+
+fn archive_stem(path: &Path) -> Option<String> {
+    if let Some(volume) = seven_zip_volume(path) {
+        return Path::new(&volume.prefix)
+            .file_stem()
+            .map(|stem| stem.to_string_lossy().to_string());
+    }
+    path.file_stem()
+        .or_else(|| path.file_name())
+        .map(|name| name.to_string_lossy().to_string())
+}
+
+fn archive_source_files(src: &Path, format: ArchiveFormat) -> Result<Vec<PathBuf>, String> {
+    if format != ArchiveFormat::SevenZip {
+        return Ok(vec![src.to_path_buf()]);
+    }
+    let Some(volume) = seven_zip_volume(src) else {
+        return Ok(vec![src.to_path_buf()]);
+    };
+    if volume.part != 1 {
+        return Err(format!(
+            "extract: split 7z archives must start from the first volume, not {}",
+            src.display()
+        ));
+    }
+
+    let parent = src.parent().unwrap_or_else(|| Path::new("."));
+    let mut parts = fs::read_dir(parent)
+        .map_err(|e| e.to_string())?
+        .filter_map(Result::ok)
+        .filter_map(|entry| {
+            let candidate = seven_zip_volume(&entry.path())?;
+            (candidate.prefix.eq_ignore_ascii_case(&volume.prefix)
+                && candidate.width == volume.width)
+                .then_some((candidate.part, entry.path()))
+        })
+        .collect::<Vec<_>>();
+    parts.sort_by_key(|(part, _)| *part);
+
+    for (index, (part, _)) in parts.iter().enumerate() {
+        let expected = index as u64 + 1;
+        if *part != expected {
+            return Err(format!(
+                "extract: split archive is incomplete; expected volume {:0width$}",
+                expected,
+                width = volume.width
+            ));
+        }
+    }
+    Ok(parts.into_iter().map(|(_, path)| path).collect())
 }
 
 fn compress_with_7z(
@@ -591,4 +726,63 @@ fn add_path_to_zip(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir(name: &str) -> PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        std::env::temp_dir().join(format!(
+            "shelfy-archive-{name}-{}-{nonce}",
+            std::process::id()
+        ))
+    }
+
+    #[test]
+    fn detects_two_and_three_digit_7z_volumes() {
+        let two = Path::new("bundle.7z.01");
+        let three = Path::new("bundle.7Z.001");
+        assert_eq!(
+            ArchiveFormat::detect_for_extract(two, ArchiveFormat::Auto),
+            Ok(ArchiveFormat::SevenZip)
+        );
+        assert_eq!(
+            ArchiveFormat::detect_for_extract(three, ArchiveFormat::Auto),
+            Ok(ArchiveFormat::SevenZip)
+        );
+        assert_eq!(archive_stem(two).as_deref(), Some("bundle"));
+        assert_eq!(seven_zip_volume(two).unwrap().part, 1);
+        assert_eq!(seven_zip_volume(three).unwrap().width, 3);
+    }
+
+    #[test]
+    fn split_archive_requires_first_and_contiguous_volumes() {
+        let root = temp_dir("volumes");
+        fs::create_dir_all(&root).unwrap();
+        for name in ["bundle.7z.01", "bundle.7z.02", "bundle.7z.03"] {
+            fs::write(root.join(name), b"part").unwrap();
+        }
+
+        let parts =
+            archive_source_files(&root.join("bundle.7z.01"), ArchiveFormat::SevenZip).unwrap();
+        assert_eq!(parts.len(), 3);
+        assert!(archive_source_files(&root.join("bundle.7z.02"), ArchiveFormat::SevenZip).is_err());
+
+        fs::remove_file(root.join("bundle.7z.02")).unwrap();
+        assert!(archive_source_files(&root.join("bundle.7z.01"), ArchiveFormat::SevenZip).is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn hides_7z_passwords_in_logs() {
+        assert_eq!(
+            display_7z_args(&["t".into(), "-psecret".into(), "file.7z".into()]),
+            "t -p******** file.7z"
+        );
+    }
 }

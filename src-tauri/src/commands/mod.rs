@@ -8,6 +8,7 @@ mod rules;
 mod scheduler;
 mod settings;
 mod system;
+mod updater;
 
 pub use config::*;
 pub use folders::*;
@@ -19,3 +20,4 @@ pub use rules::*;
 pub use scheduler::*;
 pub use settings::*;
 pub use system::*;
+pub use updater::*;
