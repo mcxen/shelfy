@@ -851,15 +851,7 @@ pub fn orden_jobs_cmd() -> Result<Vec<OrdenJob>, String> {
 
 #[tauri::command]
 pub fn orden_save_job_cmd(job: OrdenJob) -> Result<i64, String> {
-    if job.name.trim().is_empty() {
-        return Err("Job name is required".into());
-    }
-    if job.config_name.trim().is_empty() {
-        return Err("Orden config is required".into());
-    }
-    if job.mode == "cron" {
-        crate::scheduler::validate_cron_expression(job.cron_expr.as_deref().unwrap_or(""))?;
-    }
+    crate::orden_jobs::validate_job(&job)?;
     upsert_orden_job(&job).map_err(|e| e.to_string())
 }
 

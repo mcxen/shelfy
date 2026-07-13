@@ -380,7 +380,7 @@ export function OrdenPipelineEditor({
                           <Icon className="size-4" />
                         </div>
                         <span className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
-                          {mode === "filter" ? "IF" : `${index + 1}`}
+                          {mode === "filter" ? t("settings.orden.workflow.conditionBadge") : `${index + 1}`}
                           <GripVertical className="size-3.5 cursor-grab opacity-50 group-hover:opacity-100" />
                         </span>
                       </div>
@@ -389,7 +389,7 @@ export function OrdenPipelineEditor({
                         {step.value.trim() || t("settings.orden.workflow.noParameters", { defaultValue: "No parameters" })}
                       </div>
                       {step.inverted && mode === "filter" && (
-                        <Badge variant="outline" className="mt-2 h-5 px-1.5 text-[10px]">NOT</Badge>
+                        <Badge variant="outline" className="mt-2 h-5 px-1.5 text-[10px]">{t("settings.orden.workflow.excludeBadge")}</Badge>
                       )}
                     </button>
                   </div>

@@ -25,6 +25,7 @@ import {
   ListChecks,
   SlidersHorizontal,
   Wand2,
+  GripHorizontal,
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
@@ -182,7 +183,10 @@ export default function Popup() {
   return (
     <div className="glass-panel flex h-full flex-col overflow-hidden rounded-xl text-foreground">
       {/* Header */}
-      <div data-tauri-drag-region className="flex items-center justify-between border-b border-border/60 bg-card/45 px-3 py-2.5">
+      <div data-tauri-drag-region className="relative flex items-center justify-between border-b border-border/60 bg-card/45 px-3 py-2.5">
+        <div data-tauri-drag-region className="absolute left-1/2 top-0.5 flex h-3 w-12 -translate-x-1/2 cursor-grab items-center justify-center rounded-full text-muted-foreground/50 hover:text-muted-foreground active:cursor-grabbing" aria-hidden="true">
+          <GripHorizontal data-tauri-drag-region size={14} strokeWidth={1.8} />
+        </div>
         <BrandMark showLabel />
         <Tooltip>
           <TooltipTrigger asChild>

@@ -1,6 +1,6 @@
 [package]
 name = "shelfy"
-version = "0.2.3"
+version = "0.2.4"
 description = "Shelfy - Cross-platform intelligent file organizer"
 authors = ["shelfy"]
 edition = "2021"

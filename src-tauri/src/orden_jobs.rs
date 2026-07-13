@@ -29,6 +29,63 @@ fn mark_finished(job: &OrdenJob) {
     RUNNING_JOBS.lock().unwrap().remove(&job_key(job));
 }
 
+pub fn validate_job(job: &OrdenJob) -> Result<(), String> {
+    if job.name.trim().is_empty() {
+        return Err("Job name is required".into());
+    }
+    if job.config_name.trim().is_empty() {
+        return Err("Orden config is required".into());
+    }
+    match job.mode.as_str() {
+        "manual" => {}
+        "fixed" => {
+            let value = job
+                .fixed_time
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| "fixed mode requires fixed_time in HH:MM format".to_string())?;
+            parse_time(value)?;
+        }
+        "cron" => crate::scheduler::validate_cron_expression(
+            job.cron_expr
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .ok_or_else(|| "cron mode requires cron_expr".to_string())?,
+        )?,
+        "interval" => {
+            if !(1..=10080).contains(&job.interval_minutes) {
+                return Err("interval_minutes must be between 1 and 10080".into());
+            }
+        }
+        "monitor" => {
+            if split_lines(&job.watch_paths).is_empty() {
+                return Err("monitor mode requires at least one watch path".into());
+            }
+        }
+        mode => {
+            return Err(format!(
+                "Unsupported job mode '{mode}'; use manual, fixed, cron, interval, or monitor"
+            ))
+        }
+    }
+    if job.min_file_count < 0 {
+        return Err("min_file_count cannot be negative".into());
+    }
+    if let Some(value) = job.time_window_start.as_deref() {
+        parse_time(value)?;
+    }
+    if let Some(value) = job.time_window_end.as_deref() {
+        parse_time(value)?;
+    }
+    if get_orden_config(job.config_name.trim())
+        .map_err(|error| error.to_string())?
+        .is_none()
+    {
+        return Err(format!("Orden config '{}' not found", job.config_name));
+    }
+    Ok(())
+}
+
 pub fn run_due_jobs(
     trigger: &str,
     now: DateTime<Local>,
@@ -321,4 +378,44 @@ fn parse_time(time_str: &str) -> Result<NaiveTime, String> {
     NaiveTime::parse_from_str(time_str.trim(), "%H:%M")
         .or_else(|_| NaiveTime::parse_from_str(time_str.trim(), "%H:%M:%S"))
         .map_err(|e| format!("Invalid schedule time '{}': {}", time_str, e))
+}
+
+#[cfg(test)]
+mod validation_tests {
+    use super::*;
+    use chrono::Utc;
+
+    fn job(mode: &str) -> OrdenJob {
+        let now = Utc::now();
+        OrdenJob {
+            id: None,
+            name: "test".into(),
+            config_name: "missing-during-unit-test".into(),
+            enabled: true,
+            mode: mode.into(),
+            cron_expr: None,
+            fixed_time: None,
+            interval_minutes: 60,
+            watch_paths: String::new(),
+            tags: String::new(),
+            skip_tags: String::new(),
+            simulate: true,
+            min_file_count: 0,
+            path_exists: None,
+            time_window_start: None,
+            time_window_end: None,
+            last_run_at: None,
+            created_at: now,
+            updated_at: now,
+        }
+    }
+
+    #[test]
+    fn interval_bounds_are_explicit() {
+        let mut value = job("interval");
+        value.interval_minutes = 0;
+        assert!(validate_job(&value)
+            .unwrap_err()
+            .contains("interval_minutes"));
+    }
 }

@@ -18,7 +18,7 @@ use db::{init_db, FOLDER_MODE_SILENT};
 use directories::ProjectDirs;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use tauri::Manager;
 use tauri_plugin_autostart::ManagerExt;
 use watcher::FolderWatcher;
@@ -29,6 +29,9 @@ pub struct AppState {
     /// Last destination folder waiting to be opened when app is activated by notification click
     pub pending_open_folder: Arc<Mutex<Option<String>>>,
     pub scheduler: scheduler::Scheduler,
+    /// Prevent a background single-instance probe from being mistaken for a
+    /// user clicking the Dock icon on macOS.
+    pub suppress_reopen_until: Arc<Mutex<Option<Instant>>>,
 }
 
 pub fn try_run_cli() -> bool {
@@ -47,7 +50,16 @@ pub fn run() {
             tauri_plugin_autostart::MacosLauncher::LaunchAgent,
             Some(vec!["--autostart"]),
         ))
-        .plugin(tauri_plugin_single_instance::init(|app, _args, _cwd| {
+        .plugin(tauri_plugin_single_instance::init(|app, args, _cwd| {
+            // LaunchAgent/system keepalive probes must remain invisible when the
+            // primary tray process is already running.
+            if is_background_activation(&args) {
+                if let Some(state) = app.try_state::<AppState>() {
+                    *state.suppress_reopen_until.lock().unwrap() =
+                        Some(Instant::now() + Duration::from_secs(3));
+                }
+                return;
+            }
             // When Windows activates the app (e.g. user clicked a notification),
             // open any pending folder first, then show the main settings window.
             if let Some(state) = app.try_state::<AppState>() {
@@ -80,6 +92,7 @@ pub fn run() {
             ignored_files,
             pending_open_folder,
             scheduler: scheduler::Scheduler::new(),
+            suppress_reopen_until: Arc::new(Mutex::new(None)),
         })
         .setup(|app| {
             let app_handle = app.handle().clone();
@@ -89,6 +102,11 @@ pub fn run() {
                 let data_dir = proj_dirs.data_dir().to_path_buf();
                 std::fs::create_dir_all(&data_dir).ok();
                 init_db(data_dir.clone()).expect("Failed to initialize database");
+            }
+
+            #[cfg(all(target_os = "macos", not(debug_assertions)))]
+            if let Err(error) = cli::ensure_cli_launcher() {
+                eprintln!("[cli] unable to install terminal launcher: {error}");
             }
 
             // Initialize default rules on first run
@@ -229,7 +247,35 @@ pub fn run() {
 
             #[cfg(target_os = "macos")]
             if let tauri::RunEvent::Reopen { .. } = event {
-                tray::show_settings_window(app);
+                let suppressed = app
+                    .try_state::<AppState>()
+                    .and_then(|state| *state.suppress_reopen_until.lock().unwrap())
+                    .is_some_and(|until| Instant::now() <= until);
+                if !suppressed {
+                    tray::show_settings_window(app);
+                }
             }
         });
+}
+
+fn is_background_activation(args: &[String]) -> bool {
+    args.iter().any(|arg| arg == "--autostart")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_background_activation;
+
+    #[test]
+    fn autostart_single_instance_activation_stays_hidden() {
+        assert!(is_background_activation(&[
+            "shelfy".into(),
+            "--autostart".into()
+        ]));
+        assert!(!is_background_activation(&["shelfy".into()]));
+        assert!(!is_background_activation(&[
+            "shelfy".into(),
+            "--mcp".into()
+        ]));
+    }
 }

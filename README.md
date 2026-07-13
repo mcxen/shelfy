@@ -61,27 +61,32 @@ Available MCP tools include:
 - `shelfy_get_orden_config`
 - `shelfy_orden_simulate`
 - `shelfy_save_orden_config` when write tools are enabled
+- `shelfy_save_orden_job` when write tools are enabled
 - `shelfy_scan_folder` when write tools are enabled
 - `shelfy_orden_run` when write tools are enabled
 
 Write-capable tools are disabled by default and require the separate MCP write permission in Settings.
 
+Orden schedules are separate automation jobs, not fields inside the rule YAML. For a true one-hour interval, call `shelfy_save_orden_job` with `mode: "interval"` and `interval_minutes: 60`. The cron expression `0 * * * *` instead runs on each wall-clock hour.
+
 ## CLI
 
+On macOS, the installed app creates `~/.local/bin/shelfy` on its first launch and adds that directory to zsh/bash login and interactive profiles. Open a new terminal, then use the short CLI form below. The explicit `--cli` form remains supported when calling the app executable directly.
+
 ```bash
-shelfy --cli scan <folder>
-shelfy --cli rules list
-shelfy --cli rules export <path>
-shelfy --cli rules import <path> [--replace]
-shelfy --cli folders list
-shelfy --cli folders add <path> [silent|manual|paused]
-shelfy --cli folders mode <id> <silent|manual|paused>
-shelfy --cli config path
-shelfy --cli config export <path>
-shelfy --cli config import <path> [--replace]
-shelfy --cli orden check <config>
-shelfy --cli orden sim <config> [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
-shelfy --cli orden run <config> [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
+shelfy scan <folder>
+shelfy rules list
+shelfy rules export <path>
+shelfy rules import <path> [--replace]
+shelfy folders list
+shelfy folders add <path> [silent|manual|paused]
+shelfy folders mode <id> <silent|manual|paused>
+shelfy config path
+shelfy config export <path>
+shelfy config import <path> [--replace]
+shelfy orden check <config>
+shelfy orden sim <config> [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
+shelfy orden run <config> [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
 ```
 
 The `organize` CLI namespace is accepted as an alias for `orden`.

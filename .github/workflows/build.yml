@@ -6,7 +6,7 @@ on:
       - "v[0-9]+.[0-9]+.[0-9]+"
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ github.ref_name }}
@@ -40,7 +40,7 @@ jobs:
           }
           NODE
 
-  publish:
+  build:
     name: Build ${{ matrix.name }}
     needs: validate
     strategy:
@@ -48,12 +48,15 @@ jobs:
       matrix:
         include:
           - name: Windows x64
+            artifact: windows-x64
             platform: windows-latest
             args: ""
           - name: Linux x64
+            artifact: linux-x64
             platform: ubuntu-22.04
             args: ""
           - name: macOS Universal
+            artifact: macos-universal
             platform: macos-latest
             args: "--target universal-apple-darwin"
 
@@ -81,32 +84,123 @@ jobs:
       - name: Install frontend dependencies
         run: npm ci
 
-      - name: Build and upload release assets
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Shelfy ${{ github.ref_name }}
-          releaseBody: |
-            ## Downloads
-            - **macOS**: universal `.dmg` (Apple Silicon and Intel; unsigned)
-            - **Windows**: `.msi` or `-setup.exe`
-            - **Linux**: `.AppImage`, `.deb`, or `.rpm`
+      - name: Build desktop bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -n "${{ matrix.args }}" ]; then
+            npm run tauri build -- ${{ matrix.args }}
+          else
+            npm run tauri build
+          fi
 
-            See the commit history for the complete changes.
-          releaseDraft: false
-          prerelease: false
-          args: ${{ matrix.args }}
-
-      - name: Upload Windows portable executable
+      - name: Collect Windows assets
         if: matrix.platform == 'windows-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          mkdir -p release-assets
+          cp src-tauri/target/release/bundle/msi/*.msi release-assets/
+          cp src-tauri/target/release/bundle/nsis/*.exe release-assets/
+          cp src-tauri/target/release/shelfy.exe "release-assets/Shelfy_${VERSION}_x64-portable.exe"
+
+      - name: Collect Linux assets
+        if: matrix.platform == 'ubuntu-22.04'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          cp src-tauri/target/release/bundle/appimage/*.AppImage release-assets/
+          cp src-tauri/target/release/bundle/deb/*.deb release-assets/
+          cp src-tauri/target/release/bundle/rpm/*.rpm release-assets/
+
+      - name: Collect macOS assets
+        if: matrix.platform == 'macos-latest'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          BUNDLE_ROOT="src-tauri/target/universal-apple-darwin/release/bundle"
+          cp "$BUNDLE_ROOT"/dmg/*.dmg release-assets/
+          tar -czf release-assets/Shelfy_universal.app.tar.gz -C "$BUNDLE_ROOT/macos" Shelfy.app
+
+      - name: Upload platform assets
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.artifact }}
+          path: release-assets/*
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download platform assets
+        uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: downloaded-assets
+
+      - name: Flatten and verify release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p release-assets
+          while IFS= read -r -d '' asset; do
+            target="release-assets/$(basename "$asset")"
+            test ! -e "$target" || {
+              echo "duplicate release asset: $(basename "$asset")" >&2
+              exit 1
+            }
+            mv "$asset" "$target"
+          done < <(find downloaded-assets -type f -print0)
+
+          VERSION="${GITHUB_REF_NAME#v}"
+          required=(
+            "Shelfy_${VERSION}_universal.dmg"
+            "Shelfy_universal.app.tar.gz"
+            "Shelfy_${VERSION}_x64_en-US.msi"
+            "Shelfy_${VERSION}_x64-setup.exe"
+            "Shelfy_${VERSION}_x64-portable.exe"
+            "Shelfy_${VERSION}_amd64.AppImage"
+            "Shelfy_${VERSION}_amd64.deb"
+            "Shelfy-${VERSION}-1.x86_64.rpm"
+          )
+          for asset in "${required[@]}"; do
+            test -s "release-assets/$asset" || {
+              echo "missing or empty release asset: $asset" >&2
+              exit 1
+            }
+          done
+          find release-assets -maxdepth 1 -type f -printf '%f\n' | sort
+
+      - name: Write release notes
+        shell: bash
+        run: |
+          cat > release-notes.md <<'EOF'
+          ## Downloads
+          - **macOS**: universal `.dmg` or `.app.tar.gz` (Apple Silicon and Intel; unsigned)
+          - **Windows**: `.msi`, `-setup.exe`, or portable `.exe`
+          - **Linux**: `.AppImage`, `.deb`, or `.rpm`
+
+          See the commit history for the complete changes.
+          EOF
+
+      - name: Create or update GitHub Release
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          VERSION="${GITHUB_REF_NAME#v}"
-          ASSET="Shelfy_${VERSION}_x64-portable.exe"
-          cp src-tauri/target/release/shelfy.exe "$ASSET"
-          gh release upload "$GITHUB_REF_NAME" "$ASSET" --clobber
+          mapfile -d '' assets < <(find release-assets -maxdepth 1 -type f -print0 | sort -z)
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${assets[@]}" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" "${assets[@]}" \
+              --title "Shelfy $GITHUB_REF_NAME" \
+              --notes-file release-notes.md
+          fi

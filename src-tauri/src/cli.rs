@@ -9,6 +9,11 @@ use serde::Serialize;
 use std::env;
 use std::path::PathBuf;
 
+#[cfg(target_os = "macos")]
+const CLI_LAUNCHER_MARKER: &str = "# Managed by Shelfy CLI launcher";
+#[cfg(target_os = "macos")]
+const CLI_PATH_LINE: &str = "export PATH=\"$HOME/.local/bin:$PATH\"";
+
 #[derive(Serialize)]
 struct ConfigPaths {
     data_dir: String,
@@ -42,6 +47,77 @@ pub fn try_run_from_env() -> bool {
     true
 }
 
+#[cfg(target_os = "macos")]
+pub fn ensure_cli_launcher() -> Result<(), String> {
+    use std::os::unix::fs::PermissionsExt;
+
+    let home = directories::BaseDirs::new()
+        .map(|dirs| dirs.home_dir().to_path_buf())
+        .ok_or_else(|| "Unable to resolve home directory".to_string())?;
+    let bin_dir = home.join(".local/bin");
+    std::fs::create_dir_all(&bin_dir).map_err(|error| error.to_string())?;
+
+    let launcher = bin_dir.join("shelfy");
+    if launcher.exists() {
+        let existing = std::fs::read_to_string(&launcher).unwrap_or_default();
+        if !existing
+            .lines()
+            .take(3)
+            .any(|line| line == CLI_LAUNCHER_MARKER)
+        {
+            return Err(format!(
+                "{} already exists and is not managed by Shelfy",
+                launcher.display()
+            ));
+        }
+    }
+
+    let executable = std::env::current_exe().map_err(|error| error.to_string())?;
+    let script = format!(
+        "#!/bin/sh\n{CLI_LAUNCHER_MARKER}\nexec {} --cli \"$@\"\n",
+        shell_single_quote(&executable.to_string_lossy())
+    );
+    std::fs::write(&launcher, script).map_err(|error| error.to_string())?;
+    let mut permissions = std::fs::metadata(&launcher)
+        .map_err(|error| error.to_string())?
+        .permissions();
+    permissions.set_mode(0o755);
+    std::fs::set_permissions(&launcher, permissions).map_err(|error| error.to_string())?;
+
+    ensure_shell_path(&home.join(".zprofile"))?;
+    ensure_shell_path(&home.join(".zshrc"))?;
+    ensure_shell_path(&home.join(".bash_profile"))?;
+    ensure_shell_path(&home.join(".bashrc"))?;
+    Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn ensure_shell_path(profile: &std::path::Path) -> Result<(), String> {
+    let existing = std::fs::read_to_string(profile).unwrap_or_default();
+    if existing.contains("$HOME/.local/bin") || existing.contains("${HOME}/.local/bin") {
+        return Ok(());
+    }
+    let separator = if existing.is_empty() || existing.ends_with('\n') {
+        ""
+    } else {
+        "\n"
+    };
+    let addition = format!("{separator}\n{CLI_LAUNCHER_MARKER}\n{CLI_PATH_LINE}\n");
+    use std::io::Write;
+    let mut file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(profile)
+        .map_err(|error| error.to_string())?;
+    file.write_all(addition.as_bytes())
+        .map_err(|error| error.to_string())
+}
+
+#[cfg(target_os = "macos")]
+fn shell_single_quote(value: &str) -> String {
+    format!("'{}'", value.replace('\'', "'\\''"))
+}
+
 fn run(args: Vec<String>) -> Result<(), String> {
     let data_dir = init_cli_storage()?;
 
@@ -61,7 +137,7 @@ fn run(args: Vec<String>) -> Result<(), String> {
                 crate::mcp::run_stdio()?;
             }
         }
-        Some("help") | None => print_usage(),
+        Some("help") | Some("--help") | Some("-h") | None => print_usage(),
         Some(command) => return Err(format!("Unknown CLI command: {command}\n\n{}", usage())),
     }
 
@@ -309,25 +385,28 @@ fn usage() -> &'static str {
     "Shelfy local CLI
 
 Usage:
-  shelfy --cli scan <folder>
-  shelfy --cli rules list
-  shelfy --cli rules export <path>
-  shelfy --cli rules import <path> [--replace]
-  shelfy --cli rules delete <id>
-  shelfy --cli folders list
-  shelfy --cli folders add <path> [silent|manual|paused]
-  shelfy --cli folders remove <id>
-  shelfy --cli folders mode <id> <silent|manual|paused>
-  shelfy --cli config path
-  shelfy --cli config export <path>
-  shelfy --cli config import <path> [--replace]
-  shelfy --cli config reset-rules
-  shelfy --cli orden sim <config> [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
-  shelfy --cli orden run <config> [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
-  shelfy --cli orden check <config>
+  shelfy scan <folder>
+  shelfy rules list
+  shelfy rules export <path>
+  shelfy rules import <path> [--replace]
+  shelfy rules delete <id>
+  shelfy folders list
+  shelfy folders add <path> [silent|manual|paused]
+  shelfy folders remove <id>
+  shelfy folders mode <id> <silent|manual|paused>
+  shelfy config path
+  shelfy config export <path>
+  shelfy config import <path> [--replace]
+  shelfy config reset-rules
+  shelfy orden sim <config> [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
+  shelfy orden run <config> [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
+  shelfy orden check <config>
   shelfy --mcp
   shelfy --mcp --help
-  shelfy --cli mcp [--help]"
+  shelfy mcp [--help]
+
+When invoking the Shelfy.app executable directly instead of the installed
+terminal launcher, insert --cli before the command."
 }
 
 #[cfg(test)]
@@ -340,5 +419,18 @@ mod tests {
         assert!(is_help_arg("-h"));
         assert!(is_help_arg("help"));
         assert!(!is_help_arg("--mcp"));
+    }
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn quotes_cli_executable_paths_for_shell() {
+        assert_eq!(
+            shell_single_quote("/Applications/Shelfy.app/bin"),
+            "'/Applications/Shelfy.app/bin'"
+        );
+        assert_eq!(
+            shell_single_quote("/tmp/user's app"),
+            "'/tmp/user'\\''s app'"
+        );
     }
 }

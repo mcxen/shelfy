@@ -175,7 +175,7 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] 后端提供 YAML → Visual model 解析接口
 - [x] Advanced/Orden 重构为配置中心：配置与自动化任务分别按表格逐行管理，编辑器/详情/运行结果使用独立视图
 - [x] Orden 自动化任务支持 manual/fixed/cron/interval/monitor 的创建、编辑、启停、立即运行与删除
-- [x] 单条 Orden 配置支持行内试跑、配置预览和分组更多菜单；可视化规则按基础信息、来源筛选、执行动作 Card 归组
+- [x] 单条 Orden 配置支持行内模拟、配置预览和分组更多菜单；可视化规则按基础信息、来源筛选、执行动作 Card 归组
 - [x] Settings 增加 MCP 开关、stdio/HTTP 快捷配置和客户端配置片段
 - [x] 新增 Orden 模版中心 Tab：系统模版浏览、详情预览、加号快速生成配置；系统/用户模版持久化到本地 `orden/templates/` YAML 文件并支持编辑另存
 - [x] 修复 Orden 模板渲染按字节转换 Unicode 字符导致中文文件/目录名乱码；补多字节文本和环境变量回归测试
@@ -200,8 +200,16 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] Orden GUI 模拟改为有扫描预算的快速预览，每条规则最多扫描 500 个目录项、整份配置展示 10 个匹配，并强制跳过 Shell 外部命令
 - [x] Orden 配置名支持中文等 Unicode 字母/数字，保存、读取、删除统一安全规范化与扩展名处理
 - [x] MCP 增加 `--help` 操作指南，并在 Settings 复用同一份本地化指南展示启动、工具、安全边界与 Orden 多规则模型
+- [x] MCP 增加结构化 `shelfy_save_orden_job`，明确 manual/fixed/cron/interval/monitor，并区分“每隔 60 分钟”和“每个整点”
+- [x] macOS 后台 `--autostart` 单实例唤醒保持窗口隐藏，避免 keepalive 周期性弹出主窗口
+- [x] macOS release 首次启动安装用户级 `shelfy` CLI 包装器并接入 zsh/bash PATH
+- [x] Orden 运行历史改为可点击详情 Dialog，支持日志搜索与每页 50 条分页
+- [x] Settings/Popup 增加可见窗口拖拽抓手；基础 Rules 新增/编辑改为桌面式悬浮 Dialog
+- [x] Orden 配置中心支持按名称/备注搜索，并在超过 6 条时统一分页
+- [x] 移除 Settings 独立 Ignore Tab，保留底层 `.shelfyignore` 兼容能力
 - [x] Orden 编辑器绑定当前配置并移除切换下拉框；支持迁移任务/历史/YAML 的真实重命名，修正模拟返回路径、删除返回状态并增加未保存退出保护
 - [x] 补齐 Orden Action 类型、冲突操作、日志 sender/level、详情预览与 Popup 快捷任务的 i18n 显示
+- [x] 统一 Orden 中英文概念为整理方案/分类规则/匹配条件/处理方式/自动运行，并本地化 job mode、run trigger 与卡片状态等内部英文枚举
 - [x] Orden 配置支持一键复制并生成独立自增 ID；MCP 增加 `shelfy_save_orden_config`，手写 YAML 仅提交名称和内容，由后端维护 ID
 - [x] 移除未使用的隐藏 `main` WebView，自启动保持零窗口直到用户打开 UI
 - [x] tray 菜单增加监控状态、主面板、立即整理、Orden 自动化、监控目录和设置；语言/文件夹变化时刷新

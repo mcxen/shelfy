@@ -45,6 +45,9 @@ Shelfy is a quiet cross-platform backup and file organizer. It supports document
 - Rule editing supports priority, extension matching, optional regex pattern, destination, action, target folder scope, and enabled state.
 - Scheduler editing supports fixed daily times, 5-field cron expressions, Windows/macOS system keepalive install/remove, and scheduler log review.
 - Long-running actions must expose disabled/loading state and refresh store data after completion.
+- Custom-decorated Settings and tray popup windows expose a visible top-center drag handle; the surrounding header whitespace remains draggable while controls remain clickable.
+- Orden run-history rows open a desktop dialog. Large structured log sets are searched client-side and rendered in pages instead of expanding hundreds of rows inline.
+- The Orden configuration center searches names and notes and renders at most six configurations per page on both table and card layouts.
 
 ## Data Model
 
@@ -71,12 +74,15 @@ Shelfy is a quiet cross-platform backup and file organizer. It supports document
 ## Advanced Rules
 
 - Settings includes an Advanced tab for the built-in Orden YAML engine.
+- User-facing Orden terminology is outcome-oriented: configuration → organization plan, rule → sorting rule, filter → match condition, action → file operation, and job/task → automatic run. Chinese uses “整理方案 / 分类规则 / 匹配条件 / 处理方式 / 自动运行”. Technical storage and API field names remain stable.
+- Internal enum values such as `manual`, `fixed`, `mcp-run`, action names, senders, and levels must be rendered through i18n label helpers. Raw identifiers are allowed in YAML/Source mode and diagnostics, but not as normal Visual-mode labels.
 - The Advanced tab must expose saved config selection, config name, YAML editor, Visual/Source mode switching, tags, skip-tags, Check, Simulate, Run, and structured log output.
 - Visual mode is for common backup/organizing rules and must serialize back to source YAML; Source mode remains the escape hatch for advanced Orden syntax.
 - Visual mode location fields support system picker buttons for multiple files or multiple folders. Destination fields support system picker buttons for multiple destination folders.
 - The Orden engine is the preferred path for document/folder backup workflows because `copy` can preserve originals while writing into a backup destination.
 - Long-running Orden actions must disable action buttons while running and refresh History/Stats after a real run.
 - Config names must be treated as names, not paths; path separators and `..` are invalid.
+- Basic Rule creation and editing uses a focused desktop dialog over the rule list. Keep the editor grouped and compact; do not turn it into a route-like web page.
 
 ## MCP
 

@@ -100,7 +100,7 @@ GUI 的手动运行走 `src-tauri/src/commands/orden.rs`，耗时工作交给 `s
 
 Orden 配置名会规范化后同时作为 SQLite `orden_configs.name` 和 `<data_dir>/orden/<name>.yaml` 的文件名；支持 Unicode 字母与数字（包括中文）以及 `-`、`_`，并拒绝路径分隔符、`..` 和其他不安全字符。保存、读取、删除共用同一规范化逻辑，`.yaml` / `.yml` 扩展名不区分大小写。
 
-MCP 操作指南由 `src-tauri/src/mcp.rs::help_text` 统一提供：`shelfy --mcp --help`、`shelfy --cli mcp --help` 打印指南后退出，Settings → MCP 的“操作指南”通过 `mcp_help_cmd` 展示同一内容。指南覆盖启动配置、读写工具边界、Orden 多规则模型与先模拟后运行的安全流程。
+MCP 操作指南由 `src-tauri/src/mcp.rs::help_text` 统一提供：`shelfy --mcp --help`、`shelfy --cli mcp --help` 打印指南后退出，Settings → MCP 的“操作指南”通过 `mcp_help_cmd` 展示同一内容。指南覆盖启动配置、读写工具边界、Orden 多规则模型、任务调度与先模拟后运行的安全流程。`shelfy_save_orden_job` 单独写入任务表；调度不嵌入规则 YAML。“每隔 1 小时”使用 `mode=interval, interval_minutes=60`，而 `0 * * * *` 表示每个整点。
 
 ## 自动化与调度
 
@@ -114,6 +114,10 @@ MCP 操作指南由 `src-tauri/src/mcp.rs::help_text` 统一提供：`shelfy --m
 
 `src-tauri/src/orden_jobs.rs` 负责到期判定、条件检查、并发去重和后台执行。`src-tauri/src/scheduler.rs` 负责常规定时整理、cron 与 keepalive；两者的调度事件写入 `scheduler_logs`。
 
+后台 LaunchAgent/keepalive 使用 `--autostart` 唤醒应用。单实例回调必须识别该参数并保持窗口隐藏，只有用户主动再次打开应用或点击界面入口时才显示 Settings。
+
+macOS release 首次启动会由 `cli::ensure_cli_launcher` 创建 `~/.local/bin/shelfy` 包装器（自动附加 `--cli`），并幂等地为 zsh/bash 的 login/interactive 配置加入用户级 PATH；开发构建不修改用户 shell 配置。
+
 ## 前端结构
 
 ```text
@@ -125,7 +129,7 @@ src/
     OrdenVisualRuleCard.tsx  # 来源 → 条件 → 动作 的可视化规则
     OrdenPipelineEditor.tsx  # 条件/动作卡片轨道与参数检查器
     OrdenStepParameterEditor.tsx # 按 filter/action kind 绘制类型化参数并序列化 YAML value
-    RulesTab.tsx             # SQLite 简单规则管理
+    RulesTab.tsx             # SQLite 简单规则管理（含聚焦式新增/编辑 Dialog）
   components/ui/
     tag-input.tsx            # 标签、扩展名、MIME、密码候选等短值列表
     menu.tsx / select.tsx    # Portal 浮层及其主题化滚动容器
@@ -133,6 +137,12 @@ src/
 ```
 
 Settings 的 Orden 页面按需加载：首次进入 Advanced 时读取配置和任务；进入具体配置后才读取完整 YAML 与历史。窄窗口（小于 900px）使用可操作的卡片列表，桌面使用表格；不要新增只适用于表格的关键操作。
+
+Settings 顶部不再提供独立 Ignore Tab；底层 `.shelfyignore` 读写能力保留用于兼容已有配置，但不占用主导航入口。
+
+Orden 配置中心先按配置名与本地备注过滤，再统一按每页 6 条切片；桌面表格和窄屏卡片共用搜索词、页码和翻页控件。搜索词变化时回到第一页，增删导致页数减少时自动校正当前页。
+
+Orden 运行历史列表只展示运行摘要；点击桌面行或窄屏卡片后打开详情 Dialog。详情解析该次 `logs_json`，按路径、消息、动作、级别搜索，并固定每页渲染 50 条，避免数百个文件日志同时挂载。基础 Rules 的新增/编辑同样使用聚焦 Dialog，主页面始终保留列表上下文。
 
 Orden 编辑器一次只绑定一份配置：配置切换只能从配置中心发生；已有配置允许编辑名称，保存时执行真正的重命名并同步 YAML 文件、SQLite 配置、自动化任务与运行历史，不会复制出旧配置。新建草稿保存后转为已有配置。返回配置中心前会保护未保存修改，从编辑器发起的模拟/运行预览返回编辑器，从列表或详情发起的预览返回原视图。
 
@@ -158,7 +168,9 @@ OrdenVisualRuleCard
 - 动作字段：`src-tauri/src/orden/actions/mod.rs::build_action`
 - 过滤器字段：`src-tauri/src/orden/filters/mod.rs::build_filter`
 
-Orden 动作与运行过程的展示统一通过 `src/lib/ordenI18n.ts` 映射 `workflow.steps`、`workflow.senders` 和 `workflow.levels`；动作卡片、详情预览、Popup 快捷任务、模拟结果与历史日志不得直接显示原始 action/sender/level 标识。动作参数的枚举值使用 `workflow.params` 本地化。
+Orden 面向用户统一使用“整理方案 → 分类规则 → 文件位置 → 匹配条件 → 处理方式”，调度统一称为“自动运行”。代码、SQLite 与 YAML 中的 config/rule/filter/action/job 字段保持不变，避免破坏兼容性；这些内部英文变量不得作为 Visual 界面文案直接显示。
+
+Orden 动作与运行过程的展示统一通过 `src/lib/ordenI18n.ts` 映射 `workflow.steps`、`workflow.senders`、`workflow.levels`、`jobModes` 和 `runTriggers`；动作卡片、详情预览、Popup 快捷任务、任务列表、模拟结果与历史日志不得直接显示原始 action/sender/level/mode/trigger 标识。动作参数的枚举值使用 `workflow.params` 本地化。
 - 前端字段 schema：`src/components/settings/OrdenStepParameterEditor.tsx`
 - 默认示例：`src/components/settings/OrdenPipelineEditor.tsx::PRESETS`
 
@@ -179,6 +191,8 @@ Orden 动作与运行过程的展示统一通过 `src/lib/ordenI18n.ts` 映射 `
 - `.no-scrollbar` 只允许用于顶部紧凑导航与横向步骤轨道，且仍需支持滚轮、触控板与键盘滚动。
 
 修改滚动行为时优先改 `src/index.css` 或 `src/components/ui/` 基础组件，不要在单个业务页面复制 `::-webkit-scrollbar` 规则。
+
+Settings 与 Popup 都使用无传统标题栏的自定义窗口；顶部中央必须保留可见的 `GripHorizontal` 抓手并标记 `data-tauri-drag-region`，标题区空白仍可拖动，导航和关闭按钮不得被拖拽层遮挡。
 
 ## 数据与文件存储
 
@@ -217,7 +231,7 @@ SQLite 主要数据：
 MCP 是本地 stdio JSON-RPC 服务，启动方式为 `shelfy --mcp` 或 `shelfy --cli mcp`。
 
 - `mcp_enabled=false` 时不暴露 tools/resources。
-- 默认仅提供读取和 simulate；`mcp_allow_write=true` 才暴露 `shelfy_save_orden_config`、扫描文件夹和实际 Orden run。MCP 创建配置只提交 `name + yaml`，内部 ID 由 Shelfy 管理。
+- 默认仅提供读取和 simulate；`mcp_allow_write=true` 才暴露 `shelfy_save_orden_config`、`shelfy_save_orden_job`、扫描文件夹和实际 Orden run。MCP 创建配置只提交 `name + yaml`，内部 ID 由 Shelfy 管理；任务调度通过结构化 job schema 写入 SQLite。
 - stdio 模式不监听网络端口；Settings 中的 HTTP 字段为未来 bridge 预留。
 
 实现位于 `src-tauri/src/mcp.rs`，命令与资源命名为 `shelfy_*` 和 `shelfy://orden/...`。

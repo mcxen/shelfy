@@ -15,6 +15,7 @@ import { Switch } from "../ui/switch";
 import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, TableRow } from "../ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { AlertDialog, AlertDialogClose, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogPopup, AlertDialogTitle } from "../ui/alert-dialog";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogPanel, DialogPopup, DialogTitle } from "../ui/dialog";
 
 type Toast = { message: string; type: "success" | "error" } | null;
 
@@ -249,13 +250,14 @@ export function RulesTab({
         )}
       </Card>
 
-      {editingRule && (
-        <Card className="order-1 overflow-hidden">
-          <CardHeader className="border-b border-border bg-muted/20 px-3 py-2.5">
-            <CardTitle>{editingRule.id ? t("settings.rules.updateTitle") : t("settings.rules.createTitle")}</CardTitle>
-            <CardDescription>{t("settings.rules.editorDescription")}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3 px-3 pt-3 pb-3">
+      <Dialog open={editingRule != null} onOpenChange={(open) => { if (!open) setEditingRule(null); }}>
+        {editingRule && (
+        <DialogPopup className="max-h-[calc(100vh-2rem)] max-w-3xl">
+          <DialogHeader className="border-b border-border bg-muted/20">
+            <DialogTitle>{editingRule.id ? t("settings.rules.updateTitle") : t("settings.rules.createTitle")}</DialogTitle>
+            <DialogDescription>{t("settings.rules.editorDescription")}</DialogDescription>
+          </DialogHeader>
+          <DialogPanel className="space-y-3 pt-4">
             <section className="border-b border-border/70 pb-3">
               <CardHeader className="px-0 py-0 pb-2">
                 <CardTitle className="text-sm">1. {t("settings.rules.basicSettings")}</CardTitle>
@@ -377,19 +379,20 @@ export function RulesTab({
             </section>
 
             {!canSaveRule && <p className="text-xs text-destructive">{t("settings.rules.requiredFields")}</p>}
-            <div className="flex gap-2">
-              <Button type="button" onClick={handleSaveRule} disabled={!canSaveRule}>
-                <AnimatedIcon icon={Save} size={14} motion="pulse" />
-                {editingRule.id ? t("settings.rules.update") : t("settings.rules.save")}
-              </Button>
-              <Button type="button" onClick={() => setEditingRule(null)} variant="outline">
-                <X size={14} />
-                {t("common.cancel")}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+          </DialogPanel>
+          <DialogFooter>
+            <Button type="button" onClick={() => setEditingRule(null)} variant="outline">
+              <X size={14} />
+              {t("common.cancel")}
+            </Button>
+            <Button type="button" onClick={handleSaveRule} disabled={!canSaveRule}>
+              <AnimatedIcon icon={Save} size={14} motion="pulse" />
+              {editingRule.id ? t("settings.rules.update") : t("settings.rules.save")}
+            </Button>
+          </DialogFooter>
+        </DialogPopup>
+        )}
+      </Dialog>
 
       <Card className="order-2 overflow-hidden">
         <CardHeader className="flex-row items-center justify-between gap-3 border-b border-border">

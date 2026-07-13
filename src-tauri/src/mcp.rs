@@ -1,9 +1,10 @@
 use crate::db::{
     get_orden_config, get_orden_run_logs, get_recent_logs, get_recent_orden_run_logs, get_rules,
     get_settings, get_watched_folders, list_orden_configs, list_orden_jobs, log_orden_run,
-    upsert_orden_config, OrdenRunLog,
+    upsert_orden_config, upsert_orden_job, OrdenJob, OrdenRunLog,
 };
 use crate::rules::manual_scan_folder;
+use chrono::Utc;
 use serde::Deserialize;
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
@@ -32,11 +33,17 @@ const MCP_HELP_ZH: &str = r#"Shelfy MCP 操作指南
 
 写入工具（需显式启用）
   shelfy_save_orden_config   保存 name + YAML；后端自动分配/保留数据库 ID
+  shelfy_save_orden_job      创建或更新自动化任务；调度信息存储在任务中，不写入 YAML
   shelfy_scan_folder         执行简单规则，可能移动文件
   shelfy_orden_run           真实执行 Orden，可能修改文件
 
 Orden 规则模型
   一条规则是一条“来源 → 条件 → 动作”流水线。一个配置可以包含多条规则，并按 YAML 中的顺序执行，适合在一次任务里分别处理图片、文档、压缩包等不同来源或条件。每条规则可以独立启用、设置 tags、扫描范围和动作序列。
+
+任务调度模型
+  调度不属于 Orden YAML。先保存配置，再调用 shelfy_save_orden_job 绑定 config_name。
+  mode 支持 manual、fixed、cron、interval、monitor。
+  “每隔 1 小时”必须使用 mode="interval" 和 interval_minutes=60；cron "0 * * * *" 表示每个整点触发，不是从上次成功运行起间隔 60 分钟。
 
 推荐流程
   1. 先调用 shelfy_list_orden_configs 或 shelfy_get_orden_config 确认配置。
@@ -65,11 +72,15 @@ Read and simulation tools
 
 Write tools (explicit opt-in)
   shelfy_save_orden_config saves name + YAML; Shelfy assigns or preserves the database ID.
+  shelfy_save_orden_job creates or updates an automation task. Scheduling is stored on the task, never in Orden YAML.
   shelfy_scan_folder may move files using simple rules.
   shelfy_orden_run executes Orden and may modify files.
 
 Orden rule model
   One rule is a “source → filters → actions” pipeline. A configuration may contain multiple rules, executed in YAML order, so one workflow can handle images, documents, archives, or separate locations independently. Each rule has its own enabled state, tags, scan scope, filters, and ordered actions.
+
+Job scheduling model
+  Save the Orden config first, then bind a task to its config_name with shelfy_save_orden_job. Supported modes are manual, fixed, cron, interval, and monitor. “Every 1 hour” means mode="interval" with interval_minutes=60. Cron "0 * * * *" means on every wall-clock hour, not 60 minutes after the last successful run.
 
 Recommended workflow
   1. Inspect the saved config.
@@ -199,17 +210,17 @@ fn tools() -> Result<Value, String> {
         }),
         json!({
             "name": "shelfy_list_orden_configs",
-            "description": "List saved Orden configurations with timestamps and MCP resource URIs.",
+            "description": "List saved Orden configurations with timestamps, resource URIs, and associated automation jobs/schedules.",
             "inputSchema": object_schema(vec![]),
         }),
         json!({
             "name": "shelfy_get_orden_config",
-            "description": "Read a saved Orden configuration by name, including its YAML.",
+            "description": "Read a saved Orden configuration by name, including its YAML and associated automation jobs/schedules.",
             "inputSchema": object_schema(vec![("name", json!({"type": "string"}))]),
         }),
         json!({
             "name": "shelfy_list_orden_jobs",
-            "description": "List configured Orden automation jobs and their current status.",
+            "description": "List Orden automation jobs with an explicit normalized schedule object. Scheduling is stored in jobs, not in Orden YAML.",
             "inputSchema": object_schema(vec![]),
         }),
         json!({
@@ -242,6 +253,11 @@ fn tools() -> Result<Value, String> {
             ]),
         }));
         tools.push(json!({
+            "name": "shelfy_save_orden_job",
+            "description": "Create or update an Orden automation task by unique name. Save the config first. For every 1 hour use mode='interval' and interval_minutes=60; cron '0 * * * *' means every wall-clock hour. Scheduling does not belong in Orden YAML.",
+            "inputSchema": orden_job_schema(),
+        }));
+        tools.push(json!({
             "name": "shelfy_scan_folder",
             "description": "Run Shelfy's organizer on a watched folder. This may move files.",
             "inputSchema": object_schema(vec![("path", json!({"type": "string"}))]),
@@ -259,6 +275,41 @@ fn tools() -> Result<Value, String> {
     }
 
     Ok(Value::Array(tools))
+}
+
+fn orden_job_schema() -> Value {
+    json!({
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["name", "config_name", "mode"],
+        "properties": {
+            "name": {"type": "string", "description": "Unique task name; an existing task with the same name is updated."},
+            "config_name": {"type": "string", "description": "Name of an existing saved Orden configuration."},
+            "enabled": {"type": "boolean", "default": true},
+            "mode": {
+                "type": "string",
+                "enum": ["manual", "fixed", "cron", "interval", "monitor"],
+                "description": "manual=explicit only; fixed=daily local time; cron=wall-clock cron; interval=elapsed minutes since last successful run; monitor=matching watcher event."
+            },
+            "cron_expr": {"type": "string", "description": "Required only for cron mode; five fields."},
+            "fixed_time": {"type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9]$", "description": "Required only for fixed mode; local HH:MM."},
+            "interval_minutes": {"type": "integer", "minimum": 1, "maximum": 10080, "description": "Required only for interval mode. Use 60 for every 1 hour."},
+            "watch_paths": {"type": "array", "items": {"type": "string"}, "description": "Required for monitor mode; paths observed by Shelfy's watcher."},
+            "tags": {"type": "array", "items": {"type": "string"}},
+            "skip_tags": {"type": "array", "items": {"type": "string"}},
+            "simulate": {"type": "boolean", "default": true, "description": "Defaults to true for safety. Set false only when real file changes are intended."},
+            "min_file_count": {"type": "integer", "minimum": 0, "default": 0},
+            "path_exists": {"type": "string"},
+            "time_window_start": {"type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9]$"},
+            "time_window_end": {"type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9]$"}
+        },
+        "allOf": [
+            {"if": {"properties": {"mode": {"const": "cron"}}}, "then": {"required": ["cron_expr"]}},
+            {"if": {"properties": {"mode": {"const": "fixed"}}}, "then": {"required": ["fixed_time"]}},
+            {"if": {"properties": {"mode": {"const": "interval"}}}, "then": {"required": ["interval_minutes"]}},
+            {"if": {"properties": {"mode": {"const": "monitor"}}}, "then": {"required": ["watch_paths"]}}
+        ]
+    })
 }
 
 fn object_schema(properties: Vec<(&str, Value)>) -> Value {
@@ -303,16 +354,24 @@ fn call_tool(params: Value) -> Result<Value, String> {
         "shelfy_list_orden_configs" => {
             sync_orden_configs_from_disk();
             let configs = list_orden_configs().map_err(|e| e.to_string())?;
+            let jobs = list_orden_jobs().map_err(|e| e.to_string())?;
             let values = configs
                 .into_iter()
                 .map(|config| {
                     let resource_uri = config_resource_uri(&config.name);
+                    let config_jobs = jobs
+                        .iter()
+                        .filter(|job| job.config_name == config.name)
+                        .cloned()
+                        .map(orden_job_value)
+                        .collect::<Vec<_>>();
                     json!({
                         "id": config.id,
                         "name": config.name,
                         "created_at": config.created_at,
                         "updated_at": config.updated_at,
                         "resource_uri": resource_uri,
+                        "jobs": config_jobs,
                     })
                 })
                 .collect::<Vec<_>>();
@@ -324,11 +383,19 @@ fn call_tool(params: Value) -> Result<Value, String> {
             let config = get_orden_config(name)
                 .map_err(|e| e.to_string())?
                 .ok_or_else(|| format!("Orden config '{}' not found", name))?;
-            tool_text(json!(config), false)
+            let jobs = list_orden_jobs()
+                .map_err(|error| error.to_string())?
+                .into_iter()
+                .filter(|job| job.config_name == config.name)
+                .map(orden_job_value)
+                .collect::<Vec<_>>();
+            let mut value = serde_json::to_value(config).map_err(|error| error.to_string())?;
+            if let Some(object) = value.as_object_mut() {
+                object.insert("jobs".into(), Value::Array(jobs));
+            }
+            tool_text(value, false)
         }
-        "shelfy_list_orden_jobs" => {
-            tool_text(json!(list_orden_jobs().map_err(|e| e.to_string())?), false)
-        }
+        "shelfy_list_orden_jobs" => tool_text(list_orden_jobs_value()?, false),
         "shelfy_orden_history" => {
             let limit = args.get("limit").and_then(|v| v.as_i64()).unwrap_or(50);
             let logs = if let Some(name) = args.get("config_name").and_then(|v| v.as_str()) {
@@ -345,6 +412,10 @@ fn call_tool(params: Value) -> Result<Value, String> {
         "shelfy_save_orden_config" => {
             ensure_write_allowed(settings.mcp_allow_write)?;
             save_orden_config_tool(&args)
+        }
+        "shelfy_save_orden_job" => {
+            ensure_write_allowed(settings.mcp_allow_write)?;
+            save_orden_job_tool(&args)
         }
         "shelfy_scan_folder" => {
             ensure_write_allowed(settings.mcp_allow_write)?;
@@ -390,6 +461,99 @@ fn save_orden_config_tool(args: &Value) -> Result<Value, String> {
         }),
         false,
     )
+}
+
+fn save_orden_job_tool(args: &Value) -> Result<Value, String> {
+    let now = Utc::now();
+    let job = OrdenJob {
+        id: None,
+        name: required_string(args, "name")?.to_string(),
+        config_name: required_string(args, "config_name")?.to_string(),
+        enabled: args.get("enabled").and_then(Value::as_bool).unwrap_or(true),
+        mode: required_string(args, "mode")?.to_ascii_lowercase(),
+        cron_expr: optional_string(args, "cron_expr"),
+        fixed_time: optional_string(args, "fixed_time"),
+        interval_minutes: args
+            .get("interval_minutes")
+            .and_then(Value::as_i64)
+            .unwrap_or(0),
+        watch_paths: string_list(args.get("watch_paths")).join("\n"),
+        tags: string_list(args.get("tags")).join(", "),
+        skip_tags: string_list(args.get("skip_tags")).join(", "),
+        simulate: args
+            .get("simulate")
+            .and_then(Value::as_bool)
+            .unwrap_or(true),
+        min_file_count: args
+            .get("min_file_count")
+            .and_then(Value::as_i64)
+            .unwrap_or(0),
+        path_exists: optional_string(args, "path_exists"),
+        time_window_start: optional_string(args, "time_window_start"),
+        time_window_end: optional_string(args, "time_window_end"),
+        last_run_at: None,
+        created_at: now,
+        updated_at: now,
+    };
+    crate::orden_jobs::validate_job(&job)?;
+    let id = upsert_orden_job(&job).map_err(|error| error.to_string())?;
+    let saved = list_orden_jobs()
+        .map_err(|error| error.to_string())?
+        .into_iter()
+        .find(|candidate| candidate.id == Some(id))
+        .ok_or_else(|| format!("Orden job '{}' was not indexed", job.name))?;
+    tool_text(orden_job_value(saved), false)
+}
+
+fn optional_string(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToString::to_string)
+}
+
+fn string_list(value: Option<&Value>) -> Vec<String> {
+    value
+        .and_then(Value::as_array)
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .map(str::trim)
+                .filter(|item| !item.is_empty())
+                .map(ToString::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn list_orden_jobs_value() -> Result<Value, String> {
+    Ok(Value::Array(
+        list_orden_jobs()
+            .map_err(|error| error.to_string())?
+            .into_iter()
+            .map(orden_job_value)
+            .collect(),
+    ))
+}
+
+fn orden_job_value(job: OrdenJob) -> Value {
+    let schedule = match job.mode.as_str() {
+        "fixed" => json!({"type": "fixed", "fixed_time": job.fixed_time.clone()}),
+        "cron" => json!({"type": "cron", "cron_expr": job.cron_expr.clone()}),
+        "interval" => json!({"type": "interval", "interval_minutes": job.interval_minutes}),
+        "monitor" => {
+            json!({"type": "monitor", "watch_paths": job.watch_paths.lines().collect::<Vec<_>>()})
+        }
+        _ => json!({"type": "manual"}),
+    };
+    let mut value = serde_json::to_value(job).unwrap_or_else(|_| json!({}));
+    if let Some(object) = value.as_object_mut() {
+        object.insert("schedule".into(), schedule);
+    }
+    value
 }
 
 fn ensure_write_allowed(allow_write: bool) -> Result<(), String> {
@@ -572,10 +736,7 @@ fn read_resource(params: Value) -> Result<Value, String> {
             .collect::<Vec<_>>();
         ("application/json", pretty_json(Value::Array(index))?)
     } else if uri == "shelfy://orden/jobs" {
-        (
-            "application/json",
-            pretty_json(json!(list_orden_jobs().map_err(|e| e.to_string())?))?,
-        )
+        ("application/json", pretty_json(list_orden_jobs_value()?)?)
     } else if uri == "shelfy://orden/history" {
         let logs = get_recent_orden_run_logs(100).map_err(|e| e.to_string())?;
         (
@@ -738,6 +899,44 @@ mod tests {
         assert!(help.contains("shelfy_save_orden_config"));
         assert!(help.contains("来源 → 条件 → 动作"));
         assert!(help.contains("允许写入工具"));
+        assert!(help.contains("interval_minutes=60"));
+        assert!(help.contains("调度不属于 Orden YAML"));
         assert!(help_text(Some("en-US")).contains("source → filters → actions"));
+    }
+
+    #[test]
+    fn job_schema_requires_explicit_interval_minutes() {
+        let schema = orden_job_schema();
+        assert_eq!(schema["properties"]["mode"]["enum"][3], "interval");
+        assert!(schema.to_string().contains("interval_minutes"));
+        assert!(schema.to_string().contains("Use 60 for every 1 hour"));
+    }
+
+    #[test]
+    fn interval_job_output_exposes_normalized_schedule() {
+        let now = Utc::now();
+        let value = orden_job_value(OrdenJob {
+            id: Some(1),
+            name: "hourly".into(),
+            config_name: "downloads".into(),
+            enabled: true,
+            mode: "interval".into(),
+            cron_expr: None,
+            fixed_time: None,
+            interval_minutes: 60,
+            watch_paths: String::new(),
+            tags: String::new(),
+            skip_tags: String::new(),
+            simulate: true,
+            min_file_count: 0,
+            path_exists: None,
+            time_window_start: None,
+            time_window_end: None,
+            last_run_at: None,
+            created_at: now,
+            updated_at: now,
+        });
+        assert_eq!(value["schedule"]["type"], "interval");
+        assert_eq!(value["schedule"]["interval_minutes"], 60);
     }
 }

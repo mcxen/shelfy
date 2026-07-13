@@ -11,7 +11,6 @@ import { listen } from "@tauri-apps/api/event";
 import { save, open } from "@tauri-apps/plugin-dialog";
 import { BrandMark } from "./BrandMark";
 import { GeneralTab } from "./settings/GeneralTab";
-import { IgnoreTab } from "./settings/IgnoreTab";
 import { RulesTab } from "./settings/RulesTab";
 import { OrdenTab } from "./settings/OrdenTab";
 import { TopNavButton } from "./settings/TopNavButton";
@@ -48,11 +47,12 @@ import {
   Code2,
   ShieldAlert,
   LayoutGrid,
+  GripHorizontal,
 } from "lucide-react";
 
 
-type Tab = "rules" | "history" | "ignore" | "advanced" | "templates" | "general";
-const SETTINGS_TABS: Tab[] = ["rules", "history", "ignore", "advanced", "templates", "general"];
+type Tab = "rules" | "history" | "advanced" | "templates" | "general";
+const SETTINGS_TABS: Tab[] = ["rules", "history", "advanced", "templates", "general"];
 
 function initialSettingsTab(): Tab {
   const query = window.location.hash.split("?", 2)[1] || "";
@@ -172,8 +172,6 @@ export default function Settings() {
         await Promise.all([loadRules(), loadFolders()]);
       } else if (tab === "history") {
         await loadLogs();
-      } else if (tab === "ignore") {
-        await loadFolders();
       } else if (tab === "general") {
         const [, , keepalive] = await Promise.all([
           getSchedule(),
@@ -575,6 +573,13 @@ export default function Settings() {
     <div className="relative flex h-full flex-col overflow-hidden rounded-xl bg-background text-foreground">
 
       <header className="relative z-20 shrink-0 px-4 pt-3">
+        <div
+          data-tauri-drag-region
+          className="absolute left-1/2 top-0.5 z-30 flex h-3 w-20 -translate-x-1/2 cursor-grab items-center justify-center rounded-full text-muted-foreground/55 hover:bg-muted/45 hover:text-muted-foreground active:cursor-grabbing"
+          aria-hidden="true"
+        >
+          <GripHorizontal data-tauri-drag-region size={16} strokeWidth={1.8} />
+        </div>
         <div data-tauri-drag-region className="flex h-12 items-center gap-2 pl-20">
           <div className="glass-panel flex h-11 shrink-0 items-center rounded-2xl px-3">
             <BrandMark showLabel iconClassName="size-7 rounded-md" />
@@ -603,12 +608,6 @@ export default function Settings() {
             onClick={() => setTab("history")}
             icon={<History size={16} />}
             label={t("settings.history.title")}
-          />
-          <TopNavButton
-            active={tab === "ignore"}
-            onClick={() => setTab("ignore")}
-            icon={<X size={16} />}
-            label={t("settings.ignore.title")}
           />
           <TopNavButton
             active={tab === "general"}
@@ -873,9 +872,6 @@ export default function Settings() {
           />
         )}
 
-        {tab === "ignore" && (
-          <IgnoreTab />
-        )}
 
         </div>
       </main>

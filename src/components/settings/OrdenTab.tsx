@@ -20,9 +20,11 @@ import { Table, TableBody, TableCell, TableFooter, TableHead, TableHeader, Table
 import { TagInput } from "../ui/tag-input";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
 import { Braces, ChevronDown, ChevronLeft, ChevronRight, Copy, Eye, FileCheck2, History, MoreHorizontal, Pause, Pencil, Play, Plus, Save, ScanSearch, Search, StickyNote, Trash2, X } from "lucide-react";
-import { ordenOperationLabel } from "../../lib/ordenI18n";
+import { ordenJobModeLabel, ordenOperationLabel } from "../../lib/ordenI18n";
 
 type OrdenTabProps = { activeTab: "advanced" | "templates" | string; onOpenAdvanced: () => void; onOpenHistory: () => void; onFolderAccessError: (error: { path: string; error: string; permission_denied: boolean } | null) => void; };
+
+const ORDEN_CONFIG_PAGE_SIZE = 6;
 
 export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAccessError }: OrdenTabProps) {
   const { t } = useTranslation();
@@ -53,6 +55,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
   const [ordenHistoryRows, setOrdenHistoryRows] = useState<import("../../store/useAppStore").OrdenRunHistory[]>([]);
   const [ordenHistoryByConfig, setOrdenHistoryByConfig] = useState<Record<string, import("../../store/useAppStore").OrdenRunHistory[]>>({});
   const [ordenSearch, setOrdenSearch] = useState("");
+  const [ordenConfigPage, setOrdenConfigPage] = useState(0);
   const [ordenNotes, setOrdenNotes] = useState<Record<string, string>>(() => {
     try { return JSON.parse(localStorage.getItem("shelfy.orden.notes") || "{}"); } catch { return {}; }
   });
@@ -108,6 +111,28 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
       `${name} ${ordenNotes[name] || ""}`.toLowerCase().includes(query)
     );
   }, [ordenConfigs, ordenNotes, ordenSearch]);
+  const ordenConfigPageCount = Math.max(1, Math.ceil(filteredOrdenConfigs.length / ORDEN_CONFIG_PAGE_SIZE));
+  const pagedOrdenConfigs = filteredOrdenConfigs.slice(
+    ordenConfigPage * ORDEN_CONFIG_PAGE_SIZE,
+    (ordenConfigPage + 1) * ORDEN_CONFIG_PAGE_SIZE
+  );
+  const ordenConfigPageStart = filteredOrdenConfigs.length === 0
+    ? 0
+    : ordenConfigPage * ORDEN_CONFIG_PAGE_SIZE + 1;
+  const ordenConfigPageEnd = Math.min(
+    (ordenConfigPage + 1) * ORDEN_CONFIG_PAGE_SIZE,
+    filteredOrdenConfigs.length
+  );
+
+  useEffect(() => {
+    setOrdenConfigPage(0);
+  }, [ordenSearch]);
+
+  useEffect(() => {
+    if (ordenConfigPage >= ordenConfigPageCount) {
+      setOrdenConfigPage(ordenConfigPageCount - 1);
+    }
+  }, [ordenConfigPage, ordenConfigPageCount]);
 
   const parseTagList = (value: string) =>
     value
@@ -634,7 +659,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                     <div><h2 className="text-lg font-semibold">{ordenDetailName}</h2><p className="text-xs text-muted-foreground">{t("settings.orden.detailDesc")}</p></div>
                   </div>
                   <div className="flex items-center gap-2">
-                    <Button type="button" onClick={() => runOrdenConfigByName(ordenDetailName, true, "detail")} variant="outline" disabled={ordenBusy}><ScanSearch size={14} />{t("settings.orden.tryRun")}</Button>
+                    <Button type="button" onClick={() => runOrdenConfigByName(ordenDetailName, true, "detail")} variant="outline" disabled={ordenBusy}><ScanSearch size={14} />{t("settings.orden.simulate")}</Button>
                     <Button type="button" onClick={() => void duplicateOrdenConfigByName(ordenDetailName)} variant="outline" disabled={ordenBusy}><Copy size={14} />{t("settings.orden.duplicate")}</Button>
                     <Button type="button" onClick={() => handleOrdenSelect(ordenDetailName)}><Pencil size={14} />{t("settings.orden.edit")}</Button>
                   </div>
@@ -729,7 +754,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                   <Input
                     value={ordenName}
                     onChange={(e) => { setOrdenName(e.target.value); setOrdenDirty(true); }}
-                    placeholder="main"
+                    placeholder={t("settings.orden.configNamePlaceholder")}
                   />
                   {editingConfigName && ordenName !== editingConfigName && <p className="mt-1 text-xs text-muted-foreground">{t("settings.orden.renameOnSave", { oldName: editingConfigName, newName: ordenName || "—" })}</p>}
                 </div>
@@ -764,7 +789,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                   <TagInput
                     value={parseTagList(ordenTags)}
                     onChange={(tags) => setOrdenTags(tags.join(", "))}
-                    placeholder="work, invoices"
+                    placeholder={t("settings.orden.tagPlaceholder")}
                     ariaLabel={t("settings.orden.tags")}
                   />
                 </div>
@@ -775,7 +800,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                   <TagInput
                     value={parseTagList(ordenSkipTags)}
                     onChange={(tags) => setOrdenSkipTags(tags.join(", "))}
-                    placeholder="never"
+                    placeholder={t("settings.orden.skipTagPlaceholder")}
                     ariaLabel={t("settings.orden.skipTags")}
                   />
                 </div>
@@ -800,7 +825,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                   <Table>
                     <TableHeader><TableRow><TableHead>{t("settings.orden.config")}</TableHead><TableHead>{t("settings.orden.status")}</TableHead><TableHead>{t("settings.orden.schedule")}</TableHead><TableHead>{t("settings.orden.lastRun")}</TableHead><TableHead className="text-right">{t("settings.orden.actions")}</TableHead></TableRow></TableHeader>
                     <TableBody>
-                      {filteredOrdenConfigs.map((name) => {
+                      {pagedOrdenConfigs.map((name) => {
                         const history = ordenHistoryByConfig[name] || [];
                         const last = history[0];
                         const jobs = configJobs(name);
@@ -816,7 +841,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                               <div className="flex flex-wrap justify-end gap-1">
                                 <Button type="button" onClick={() => runOrdenConfigByName(name, true)} variant="outline" size="sm" className="max-[900px]:px-2" disabled={ordenBusy}>
                                   <ScanSearch size={13} />
-                                  {t("settings.orden.tryRun")}
+                                  {t("settings.orden.simulate")}
                                 </Button>
                                 <Button type="button" onClick={() => handleOrdenPreview(name)} variant="ghost" size="sm" className="max-[900px]:px-2">
                                   <Eye size={13} />
@@ -856,7 +881,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                   </Table>
                 </div>
                 <div className="space-y-2 min-[900px]:hidden">
-                  {filteredOrdenConfigs.map((name) => {
+                  {pagedOrdenConfigs.map((name) => {
                     const history = ordenHistoryByConfig[name] || [];
                     const last = history[0];
                     const jobs = configJobs(name);
@@ -866,7 +891,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                       <div className="flex items-start justify-between gap-2">
                         <button type="button" className="min-w-0 text-left" onClick={() => handleOrdenPreview(name)}><div className="truncate text-sm font-medium">{name}</div><div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{ordenNotes[name] || t("settings.orden.noNote")}</div></button>
                         <div className="flex shrink-0 items-center gap-1">
-                          <Tooltip><TooltipTrigger asChild><Button type="button" onClick={() => runOrdenConfigByName(name, true)} variant="ghost" size="icon-sm" disabled={ordenBusy} aria-label={t("settings.orden.tryRun")}><ScanSearch size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.tryRun")}</TooltipContent></Tooltip>
+                          <Tooltip><TooltipTrigger asChild><Button type="button" onClick={() => runOrdenConfigByName(name, true)} variant="ghost" size="icon-sm" disabled={ordenBusy} aria-label={t("settings.orden.simulate")}><ScanSearch size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.simulate")}</TooltipContent></Tooltip>
                           <Tooltip><TooltipTrigger asChild><Button type="button" onClick={() => handleOrdenPreview(name)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.preview")}><Eye size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.preview")}</TooltipContent></Tooltip>
                           <Menu>
                             <MenuTrigger render={<Button type="button" variant="ghost" size="icon-sm" aria-label={t("settings.orden.moreActions")} />}><MoreHorizontal size={15} /></MenuTrigger>
@@ -879,6 +904,42 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                   })}
                   {filteredOrdenConfigs.length === 0 && <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">{t("settings.orden.noConfigs")}</div>}
                 </div>
+                {filteredOrdenConfigs.length > ORDEN_CONFIG_PAGE_SIZE && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
+                    <div className="text-xs text-muted-foreground">
+                      {t("settings.orden.configPageSummary", {
+                        start: ordenConfigPageStart,
+                        end: ordenConfigPageEnd,
+                        total: filteredOrdenConfigs.length,
+                      })}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setOrdenConfigPage((page) => Math.max(0, page - 1))}
+                        disabled={ordenConfigPage === 0}
+                      >
+                        <ChevronLeft size={14} />
+                        {t("settings.orden.previousPage")}
+                      </Button>
+                      <span className="min-w-16 text-center text-xs text-muted-foreground">
+                        {t("settings.orden.pageStatus", { page: ordenConfigPage + 1, pages: ordenConfigPageCount })}
+                      </span>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setOrdenConfigPage((page) => Math.min(ordenConfigPageCount - 1, page + 1))}
+                        disabled={ordenConfigPage + 1 >= ordenConfigPageCount}
+                      >
+                        {t("settings.orden.nextPage")}
+                        <ChevronRight size={14} />
+                      </Button>
+                    </div>
+                  </div>
+                )}
               </div>
               )}
             </div>
@@ -926,7 +987,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                       <SelectContent>
                         <SelectItem value="manual">{t("settings.orden.modeManual")}</SelectItem>
                         <SelectItem value="fixed">{t("settings.orden.modeFixed")}</SelectItem>
-                        <SelectItem value="cron">Cron</SelectItem>
+                        <SelectItem value="cron">{t("settings.orden.modeCron")}</SelectItem>
                         <SelectItem value="interval">{t("settings.orden.modeInterval")}</SelectItem>
                         <SelectItem value="monitor">{t("settings.orden.modeMonitor")}</SelectItem>
                       </SelectContent>
@@ -937,7 +998,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                     <Label className="flex items-center gap-2 text-sm"><Switch checked={editingOrdenJob.simulate} onCheckedChange={(checked) => setEditingOrdenJob({ ...editingOrdenJob, simulate: checked })} /> {t("settings.orden.simulate")}</Label>
                   </div>
                   {editingOrdenJob.mode === "cron" && <div>
-                    <Label className="mb-1 block text-xs text-muted-foreground">Cron</Label>
+                    <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.cronExpression")}</Label>
                     <Input value={editingOrdenJob.cron_expr || ""} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, cron_expr: e.target.value })} placeholder="0 * * * *" />
                   </div>}
                   {editingOrdenJob.mode === "fixed" && <div>
@@ -949,7 +1010,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                       <Input type="number" min={1} value={editingOrdenJob.interval_minutes} onChange={(e) => setEditingOrdenJob({ ...editingOrdenJob, interval_minutes: parseInt(e.target.value, 10) || 60 })} />
                   </div>}
                   <div>
-                    <Label className="mb-1 block text-xs text-muted-foreground">Tags</Label>
+                    <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.tags")}</Label>
                     <TagInput value={parseTagList(editingOrdenJob.tags)} onChange={(tags) => setEditingOrdenJob({ ...editingOrdenJob, tags: tags.join(", ") })} ariaLabel={t("settings.orden.tags")} />
                   </div>
                   <div>
@@ -992,7 +1053,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                       <TableRow key={job.id || job.name}>
                         <TableCell><div className="font-medium">{job.name}</div>{job.simulate && <div className="mt-1 text-xs text-muted-foreground">{t("settings.orden.simulate")}</div>}</TableCell>
                         <TableCell className="text-muted-foreground">{job.config_name}</TableCell>
-                        <TableCell><Badge variant="outline">{job.mode}</Badge></TableCell>
+                        <TableCell><Badge variant="outline">{ordenJobModeLabel(t, job.mode)}</Badge></TableCell>
                         <TableCell><div className="flex items-center gap-2"><Switch checked={job.enabled} onCheckedChange={(enabled) => ordenSaveJob({ ...job, enabled }).then(() => ordenJobs()).then(setOrdenJobsRows)} aria-label={t("settings.orden.toggleTask", { name: job.name })} /><span className="text-xs text-muted-foreground">{job.enabled ? t("settings.orden.running") : t("settings.orden.stopped")}</span></div></TableCell>
                         <TableCell className="text-xs text-muted-foreground">{job.last_run_at ? new Date(job.last_run_at).toLocaleString() : "—"}</TableCell>
                         <TableCell><div className="flex justify-end gap-1"><Button onClick={() => handleRunOrdenJob(job)} disabled={ordenBusy} variant="ghost" size="icon-sm" aria-label={t("settings.orden.runTask", { name: job.name })}><Play size={14} /></Button><Button onClick={() => setEditingOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.editTask", { name: job.name })}><Pencil size={14} /></Button><Button onClick={() => handleDeleteOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.deleteTask", { name: job.name })} className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 size={14} /></Button></div></TableCell>
@@ -1004,7 +1065,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
               </div>
               <div className="space-y-2 min-[900px]:hidden">
                 {ordenJobsRows.map((job) => <div key={job.id || job.name} className="rounded-lg border border-border p-3">
-                  <div className="flex items-start justify-between gap-2"><div className="min-w-0"><div className="truncate text-sm font-medium">{job.name}</div><div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><span>{job.config_name}</span><Badge variant="outline">{job.mode}</Badge>{job.simulate && <span>{t("settings.orden.simulate")}</span>}</div></div><div className="flex shrink-0 items-center gap-1"><Tooltip><TooltipTrigger asChild><Button onClick={() => handleRunOrdenJob(job)} disabled={ordenBusy} variant="ghost" size="icon-sm" aria-label={t("settings.orden.runTask", { name: job.name })}><Play size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.runTask", { name: job.name })}</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><Button onClick={() => setEditingOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.editTask", { name: job.name })}><Pencil size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.editTask", { name: job.name })}</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><Button onClick={() => handleDeleteOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.deleteTask", { name: job.name })} className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.deleteTask", { name: job.name })}</TooltipContent></Tooltip></div></div>
+                  <div className="flex items-start justify-between gap-2"><div className="min-w-0"><div className="truncate text-sm font-medium">{job.name}</div><div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><span>{job.config_name}</span><Badge variant="outline">{ordenJobModeLabel(t, job.mode)}</Badge>{job.simulate && <span>{t("settings.orden.simulate")}</span>}</div></div><div className="flex shrink-0 items-center gap-1"><Tooltip><TooltipTrigger asChild><Button onClick={() => handleRunOrdenJob(job)} disabled={ordenBusy} variant="ghost" size="icon-sm" aria-label={t("settings.orden.runTask", { name: job.name })}><Play size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.runTask", { name: job.name })}</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><Button onClick={() => setEditingOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.editTask", { name: job.name })}><Pencil size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.editTask", { name: job.name })}</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><Button onClick={() => handleDeleteOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.deleteTask", { name: job.name })} className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.deleteTask", { name: job.name })}</TooltipContent></Tooltip></div></div>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><Switch checked={job.enabled} onCheckedChange={(enabled) => ordenSaveJob({ ...job, enabled }).then(() => ordenJobs()).then(setOrdenJobsRows)} aria-label={t("settings.orden.toggleTask", { name: job.name })} /><span>{job.enabled ? t("settings.orden.running") : t("settings.orden.stopped")}</span><span>{job.last_run_at ? new Date(job.last_run_at).toLocaleString() : "—"}</span></div>
                 </div>)}
                 {ordenJobsRows.length === 0 && <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">{t("settings.orden.noTasks")}</div>}

@@ -98,7 +98,7 @@ export function OrdenVisualRuleCard({
           </div>
           <div className="md:col-span-2 xl:col-span-1">
             <Label htmlFor={fieldId("tags")} className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.tags")}</Label>
-            <TagInput value={rule.tags.split(",").map((tag) => tag.trim()).filter(Boolean)} onChange={(tags) => onUpdate(rule.id, { tags: tags.join(", ") })} placeholder="backup, docs" ariaLabel={t("settings.orden.tags")} />
+            <TagInput value={rule.tags.split(",").map((tag) => tag.trim()).filter(Boolean)} onChange={(tags) => onUpdate(rule.id, { tags: tags.join(", ") })} placeholder={t("settings.orden.ruleTagPlaceholder")} ariaLabel={t("settings.orden.tags")} />
           </div>
         </div>
 
