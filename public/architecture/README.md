@@ -81,6 +81,7 @@ orden/
 执行规则：
 
 - `simulate=true` 只产生日志，不执行文件变更，也不写可撤销 History。
+- Settings 中的手动“模拟”是快速预览：每条规则的 walker 最多检查 500 个目录项，整份配置最多展示 10 个匹配后提前停止，并且无条件跳过 Shell 外部命令（即使 YAML 设置了 `run_in_simulation`）。CLI/MCP 的 simulate 仍保持全量兼容语义。
 - 一条规则的 actions 顺序执行；move 后的后续动作使用新的资源路径。
 - `copy` 可扇出到多个目标，`move` 保持单一目标，避免首个移动后源文件消失。
 - 模板和过滤器可以写入/读取 `Resource.vars`。
@@ -95,7 +96,11 @@ orden/
 | watcher monitor | `orden_jobs::run_monitor_jobs` | 同自动化任务 | 同上 |
 | MCP | `shelfy_orden_simulate/run` | MCP worker thread 后 join | `orden_run_logs` |
 
-GUI 的手动运行走 `src-tauri/src/commands/orden.rs`，耗时工作交给 `src-tauri/src/orden_runtime.rs`。运行时维护最多 256 个任务状态，前端通过 `orden_task_status_cmd` 轮询，避免阻塞 Tauri command 线程。
+GUI 的手动运行走 `src-tauri/src/commands/orden.rs`，耗时工作交给 `src-tauri/src/orden_runtime.rs`。运行时维护最多 256 个任务状态，前端通过 `orden_task_status_cmd` 轮询，避免阻塞 Tauri command 线程。模拟请求会向 walker 下传扫描预算，因此会在读取目录期间提前停止，而不是先全量收集路径再截断结果。
+
+Orden 配置名会规范化后同时作为 SQLite `orden_configs.name` 和 `<data_dir>/orden/<name>.yaml` 的文件名；支持 Unicode 字母与数字（包括中文）以及 `-`、`_`，并拒绝路径分隔符、`..` 和其他不安全字符。保存、读取、删除共用同一规范化逻辑，`.yaml` / `.yml` 扩展名不区分大小写。
+
+MCP 操作指南由 `src-tauri/src/mcp.rs::help_text` 统一提供：`shelfy --mcp --help`、`shelfy --cli mcp --help` 打印指南后退出，Settings → MCP 的“操作指南”通过 `mcp_help_cmd` 展示同一内容。指南覆盖启动配置、读写工具边界、Orden 多规则模型与先模拟后运行的安全流程。
 
 ## 自动化与调度
 
@@ -129,6 +134,10 @@ src/
 
 Settings 的 Orden 页面按需加载：首次进入 Advanced 时读取配置和任务；进入具体配置后才读取完整 YAML 与历史。窄窗口（小于 900px）使用可操作的卡片列表，桌面使用表格；不要新增只适用于表格的关键操作。
 
+Orden 编辑器一次只绑定一份配置：配置切换只能从配置中心发生；已有配置允许编辑名称，保存时执行真正的重命名并同步 YAML 文件、SQLite 配置、自动化任务与运行历史，不会复制出旧配置。新建草稿保存后转为已有配置。返回配置中心前会保护未保存修改，从编辑器发起的模拟/运行预览返回编辑器，从列表或详情发起的预览返回原视图。
+
+“复制配置”只复制规则 YAML，并以 `<原名>-copy[-N]` 建立新的 `orden_configs` 记录和自增 ID；自动化任务与运行历史不复制，避免副本创建后立即继承调度或混淆审计记录。编辑器内复制会包含当前尚未保存的规则内容，复制完成后直接打开副本。
+
 General 设置页位于 `components/settings/GeneralTab.tsx`，信息架构固定按“偏好设置 → 文件处理 → 自动化 → AI/MCP → 维护”排列。语言、主题、开机启动等简单设置在桌面端同排；宽限期和文件占用归入文件处理；固定时间、Cron、后台保活和调度日志归入自动化；更新与配置导入导出归入维护。新增通用设置时先归入现有类别，不要直接在页面末尾追加新 Card。
 
 Orden Visual 与 Source 的关系：Visual 覆盖当前 UI 可选的常用 filter/action，并序列化成 YAML；Source 是未知/高级语法的逃生入口。复杂 YAML 的未知字段与注释目前不能保证 Visual round-trip，切换前应视为可能丢失非可视化表达。
@@ -148,6 +157,8 @@ OrdenVisualRuleCard
 
 - 动作字段：`src-tauri/src/orden/actions/mod.rs::build_action`
 - 过滤器字段：`src-tauri/src/orden/filters/mod.rs::build_filter`
+
+Orden 动作与运行过程的展示统一通过 `src/lib/ordenI18n.ts` 映射 `workflow.steps`、`workflow.senders` 和 `workflow.levels`；动作卡片、详情预览、Popup 快捷任务、模拟结果与历史日志不得直接显示原始 action/sender/level 标识。动作参数的枚举值使用 `workflow.params` 本地化。
 - 前端字段 schema：`src/components/settings/OrdenStepParameterEditor.tsx`
 - 默认示例：`src/components/settings/OrdenPipelineEditor.tsx::PRESETS`
 
@@ -187,7 +198,7 @@ SQLite 主要数据：
 
 - `rules`、`watched_folders`：简单规则与监控目录。
 - `action_logs`：基础 Rules 与 Orden move/rename 的可撤销历史。
-- `orden_configs`：YAML 的索引/缓存，磁盘 YAML 仍是配置事实来源。
+- `orden_configs`：YAML 的索引/缓存，`id INTEGER PRIMARY KEY AUTOINCREMENT` 是内部稳定身份，磁盘 YAML 仍是配置事实来源且不嵌入 ID。重命名保留 ID；复制生成新 ID；GUI/MCP 保存或磁盘同步手写 YAML 时由后端自动分配 ID。
 - `orden_jobs`：自动化任务。
 - `orden_run_logs`：Orden 的运行结果和结构化日志 JSON。
 - `scheduler_logs`：调度、保活与失败事件。
@@ -206,7 +217,7 @@ SQLite 主要数据：
 MCP 是本地 stdio JSON-RPC 服务，启动方式为 `shelfy --mcp` 或 `shelfy --cli mcp`。
 
 - `mcp_enabled=false` 时不暴露 tools/resources。
-- 默认仅提供读取和 simulate；`mcp_allow_write=true` 才暴露扫描文件夹和实际 Orden run。
+- 默认仅提供读取和 simulate；`mcp_allow_write=true` 才暴露 `shelfy_save_orden_config`、扫描文件夹和实际 Orden run。MCP 创建配置只提交 `name + yaml`，内部 ID 由 Shelfy 管理。
 - stdio 模式不监听网络端口；Settings 中的 HTTP 字段为未来 bridge 预留。
 
 实现位于 `src-tauri/src/mcp.rs`，命令与资源命名为 `shelfy_*` 和 `shelfy://orden/...`。

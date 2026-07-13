@@ -15,6 +15,7 @@ import { IgnoreTab } from "./settings/IgnoreTab";
 import { RulesTab } from "./settings/RulesTab";
 import { OrdenTab } from "./settings/OrdenTab";
 import { TopNavButton } from "./settings/TopNavButton";
+import { ordenOperationLabel } from "../lib/ordenI18n";
 import {
   defaultMcpDraft,
   defaultSchedule,
@@ -100,6 +101,7 @@ export default function Settings() {
     exportConfig,
     importConfig,
     getMcpClientConfig,
+    getMcpHelp,
   } = useAppStore();
 
   const [tab, setTab] = useState<Tab>(initialSettingsTab);
@@ -745,7 +747,7 @@ export default function Settings() {
                       <div className="flex flex-wrap items-center gap-2">
                         <div className="truncate text-sm font-medium">{log.file_name}</div>
                         <Badge variant="outline">{log.engine}</Badge>
-                        <Badge variant="secondary">{log.action}</Badge>
+                        <Badge variant="secondary">{ordenOperationLabel(t, log.action)}</Badge>
                       </div>
                       <div className="mt-0.5 text-xs text-muted-foreground">
                         {new Date(log.timestamp).toLocaleString()} · {log.rule_label || log.file_type}
@@ -860,6 +862,7 @@ export default function Settings() {
             handleCopyMcpConfig={handleCopyMcpConfig}
             mcpClientConfig={mcpClientConfig}
             mcpToast={mcpToast}
+            getMcpHelp={getMcpHelp}
             handleExportConfig={handleExportConfig}
             handleImportConfig={handleImportConfig}
             replaceConfigOnImport={replaceConfigOnImport}

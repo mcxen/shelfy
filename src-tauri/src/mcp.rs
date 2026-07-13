@@ -8,6 +8,89 @@ use serde::Deserialize;
 use serde_json::{json, Value};
 use std::io::{self, BufRead, Write};
 
+const MCP_HELP_ZH: &str = r#"Shelfy MCP 操作指南
+
+启动
+  shelfy --mcp
+  shelfy --cli mcp
+  shelfy --mcp --help
+
+配置
+  1. 在 Shelfy 设置 → MCP 中启用服务。
+  2. stdio 客户端使用设置页生成的 command/args 配置；args 默认为 ["--mcp"]。
+  3. 默认仅开放读取和模拟。只有启用“允许写入工具”后，真实扫描和 Orden 运行工具才会出现。
+
+可用读取工具
+  shelfy_list_folders        列出监控文件夹
+  shelfy_list_rules          列出简单 Rules
+  shelfy_recent_logs         查看最近操作记录
+  shelfy_list_orden_configs  列出 Orden 配置
+  shelfy_get_orden_config    读取配置 YAML
+  shelfy_list_orden_jobs     列出自动化任务
+  shelfy_orden_history       查看 Orden 历史
+  shelfy_orden_simulate      模拟配置，不修改文件
+
+写入工具（需显式启用）
+  shelfy_save_orden_config   保存 name + YAML；后端自动分配/保留数据库 ID
+  shelfy_scan_folder         执行简单规则，可能移动文件
+  shelfy_orden_run           真实执行 Orden，可能修改文件
+
+Orden 规则模型
+  一条规则是一条“来源 → 条件 → 动作”流水线。一个配置可以包含多条规则，并按 YAML 中的顺序执行，适合在一次任务里分别处理图片、文档、压缩包等不同来源或条件。每条规则可以独立启用、设置 tags、扫描范围和动作序列。
+
+推荐流程
+  1. 先调用 shelfy_list_orden_configs 或 shelfy_get_orden_config 确认配置。
+  2. 调用 shelfy_orden_simulate 检查匹配与动作日志。
+  3. 用户确认后再启用写入权限并调用 shelfy_orden_run。
+
+安全提示
+  不要把 --help 加进 MCP 客户端的常驻启动参数；--help 只打印本指南并退出。真实运行前先模拟，并保持写入工具默认关闭。"#;
+
+const MCP_HELP_EN: &str = r#"Shelfy MCP Guide
+
+Start
+  shelfy --mcp
+  shelfy --cli mcp
+  shelfy --mcp --help
+
+Setup
+  1. Enable MCP in Shelfy Settings → MCP.
+  2. For stdio clients, copy the generated command/args config. Args default to ["--mcp"].
+  3. Read and simulation tools are exposed by default. Real scan/run tools appear only when “Allow write tools” is enabled.
+
+Read and simulation tools
+  shelfy_list_folders, shelfy_list_rules, shelfy_recent_logs,
+  shelfy_list_orden_configs, shelfy_get_orden_config,
+  shelfy_list_orden_jobs, shelfy_orden_history, shelfy_orden_simulate
+
+Write tools (explicit opt-in)
+  shelfy_save_orden_config saves name + YAML; Shelfy assigns or preserves the database ID.
+  shelfy_scan_folder may move files using simple rules.
+  shelfy_orden_run executes Orden and may modify files.
+
+Orden rule model
+  One rule is a “source → filters → actions” pipeline. A configuration may contain multiple rules, executed in YAML order, so one workflow can handle images, documents, archives, or separate locations independently. Each rule has its own enabled state, tags, scan scope, filters, and ordered actions.
+
+Recommended workflow
+  1. Inspect the saved config.
+  2. Call shelfy_orden_simulate and review its logs.
+  3. After user confirmation, enable write tools and call shelfy_orden_run.
+
+Safety
+  Do not add --help to a client's persistent MCP launch args: it prints this guide and exits. Simulate first and keep write tools disabled by default."#;
+
+pub fn help_text(language: Option<&str>) -> &'static str {
+    if language.is_some_and(|value| value.to_ascii_lowercase().starts_with("zh")) {
+        MCP_HELP_ZH
+    } else {
+        MCP_HELP_EN
+    }
+}
+
+pub fn help_text_from_env() -> &'static str {
+    help_text(std::env::var("LANG").ok().as_deref())
+}
+
 #[derive(Debug, Deserialize)]
 struct JsonRpcMessage {
     id: Option<Value>,
@@ -151,6 +234,14 @@ fn tools() -> Result<Value, String> {
 
     if settings.mcp_allow_write {
         tools.push(json!({
+            "name": "shelfy_save_orden_config",
+            "description": "Create or update a saved Orden configuration from a name and YAML. Shelfy manages the internal database ID; do not add an ID to the YAML.",
+            "inputSchema": object_schema(vec![
+                ("name", json!({"type": "string"})),
+                ("yaml", json!({"type": "string"})),
+            ]),
+        }));
+        tools.push(json!({
             "name": "shelfy_scan_folder",
             "description": "Run Shelfy's organizer on a watched folder. This may move files.",
             "inputSchema": object_schema(vec![("path", json!({"type": "string"}))]),
@@ -251,6 +342,10 @@ fn call_tool(params: Value) -> Result<Value, String> {
             )
         }
         "shelfy_orden_simulate" => run_orden_tool(args, true),
+        "shelfy_save_orden_config" => {
+            ensure_write_allowed(settings.mcp_allow_write)?;
+            save_orden_config_tool(&args)
+        }
         "shelfy_scan_folder" => {
             ensure_write_allowed(settings.mcp_allow_write)?;
             let path = args
@@ -265,6 +360,36 @@ fn call_tool(params: Value) -> Result<Value, String> {
         }
         _ => tool_text(json!({"error": format!("Unknown tool: {}", name)}), true),
     }
+}
+
+fn mcp_data_dir() -> Result<std::path::PathBuf, String> {
+    directories::ProjectDirs::from("cc", "shelfy", "shelfy")
+        .map(|dirs| dirs.data_dir().to_path_buf())
+        .ok_or_else(|| "Unable to resolve Shelfy data directory".to_string())
+}
+
+fn save_orden_config_tool(args: &Value) -> Result<Value, String> {
+    let name = crate::orden::normalize_config_name(required_string(args, "name")?)?;
+    let yaml = required_string(args, "yaml")?;
+    crate::orden::Config::from_string(yaml)?;
+    let data_dir = mcp_data_dir()?;
+    crate::orden::save_config_text(&data_dir, &name, yaml)?;
+    if let Err(error) = upsert_orden_config(&name, yaml) {
+        return Err(error.to_string());
+    }
+    let config = get_orden_config(&name)
+        .map_err(|error| error.to_string())?
+        .ok_or_else(|| format!("Orden config '{}' was not indexed", name))?;
+    tool_text(
+        json!({
+            "id": config.id,
+            "name": config.name,
+            "resource_uri": config_resource_uri(&name),
+            "created_at": config.created_at,
+            "updated_at": config.updated_at,
+        }),
+        false,
+    )
 }
 
 fn ensure_write_allowed(allow_write: bool) -> Result<(), String> {
@@ -285,6 +410,7 @@ fn run_orden_tool(args: Value, simulate: bool) -> Result<Value, String> {
         tags: tags.into_iter().collect(),
         skip_tags: skip_tags.into_iter().collect(),
         working_dir: std::env::current_dir().unwrap_or_default(),
+        preview: None,
     };
     let execution = std::thread::Builder::new()
         .name("orden-mcp".to_string())
@@ -367,15 +493,14 @@ fn required_string<'a>(value: &'a Value, key: &str) -> Result<&'a str, String> {
 }
 
 fn sync_orden_configs_from_disk() {
-    let Some(project_dirs) = directories::ProjectDirs::from("cc", "shelfy", "shelfy") else {
+    let Ok(data_dir) = mcp_data_dir() else {
         return;
     };
-    let data_dir = project_dirs.data_dir();
-    for name in crate::orden::list_config_names(data_dir) {
+    for name in crate::orden::list_config_names(&data_dir) {
         if get_orden_config(&name).ok().flatten().is_some() {
             continue;
         }
-        if let Ok(yaml) = crate::orden::load_config_text(data_dir, &name) {
+        if let Ok(yaml) = crate::orden::load_config_text(&data_dir, &name) {
             let _ = upsert_orden_config(&name, &yaml);
         }
     }
@@ -604,5 +729,15 @@ mod tests {
         let response = handle_method("initialize", None).unwrap();
         assert!(response["capabilities"]["tools"].is_object());
         assert!(response["capabilities"]["resources"].is_object());
+    }
+
+    #[test]
+    fn help_covers_startup_orden_rules_and_write_safety() {
+        let help = help_text(Some("zh-CN"));
+        assert!(help.contains("shelfy --mcp --help"));
+        assert!(help.contains("shelfy_save_orden_config"));
+        assert!(help.contains("来源 → 条件 → 动作"));
+        assert!(help.contains("允许写入工具"));
+        assert!(help_text(Some("en-US")).contains("source → filters → actions"));
     }
 }

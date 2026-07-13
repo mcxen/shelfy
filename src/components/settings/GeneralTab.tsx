@@ -1,11 +1,12 @@
 import { useState } from "react";
 import { useTranslation } from "react-i18next";
-import { Activity, Bot, Copy, Download, FileCheck2, RefreshCw, Rocket, Save, ServerCog, SlidersHorizontal, Upload, X } from "lucide-react";
+import { Activity, BookOpen, Bot, Copy, Download, FileCheck2, RefreshCw, Rocket, Save, ServerCog, SlidersHorizontal, Upload, X } from "lucide-react";
 import { AppSettings, McpClientConfig, ScheduleSettings, SchedulerLog, UpdateInfo } from "../../store/useAppStore";
 import { AnimatedIcon } from "../ui/animated-icon";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
 import { Checkbox } from "../ui/checkbox";
+import { Dialog, DialogDescription, DialogFooter, DialogHeader, DialogPanel, DialogPopup, DialogTitle } from "../ui/dialog";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
@@ -57,6 +58,7 @@ interface GeneralTabProps {
   handleCopyMcpConfig: () => void;
   mcpClientConfig: McpClientConfig | null;
   mcpToast: Toast;
+  getMcpHelp: (language: string) => Promise<string>;
   handleExportConfig: () => void;
   handleImportConfig: () => void;
   replaceConfigOnImport: boolean;
@@ -97,6 +99,7 @@ export function GeneralTab({
   handleCopyMcpConfig,
   mcpClientConfig,
   mcpToast,
+  getMcpHelp,
   handleExportConfig,
   handleImportConfig,
   replaceConfigOnImport,
@@ -105,10 +108,26 @@ export function GeneralTab({
   checkUpdate,
   installUpdate,
 }: GeneralTabProps) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
   const [updateBusy, setUpdateBusy] = useState(false);
   const [updateError, setUpdateError] = useState<string | null>(null);
+  const [mcpHelpOpen, setMcpHelpOpen] = useState(false);
+  const [mcpHelp, setMcpHelp] = useState("");
+  const [mcpHelpBusy, setMcpHelpBusy] = useState(false);
+
+  const handleOpenMcpHelp = async () => {
+    setMcpHelpOpen(true);
+    if (mcpHelp) return;
+    setMcpHelpBusy(true);
+    try {
+      setMcpHelp(await getMcpHelp(i18n.resolvedLanguage || i18n.language || "en"));
+    } catch (error) {
+      setMcpHelp(String(error));
+    } finally {
+      setMcpHelpBusy(false);
+    }
+  };
 
   const handleCheckUpdate = async () => {
     setUpdateBusy(true);
@@ -505,6 +524,10 @@ export function GeneralTab({
             <Copy size={14} />
             {t("settings.mcp.copyConfig")}
           </Button>
+          <Button onClick={() => void handleOpenMcpHelp()} variant="outline">
+            <BookOpen size={14} />
+            {t("settings.mcp.help")}
+          </Button>
         </div>
 
         {mcpToast && (
@@ -566,6 +589,23 @@ export function GeneralTab({
           </div>
         )}
       </Card>
+
+      <Dialog open={mcpHelpOpen} onOpenChange={setMcpHelpOpen}>
+        <DialogPopup className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{t("settings.mcp.helpTitle")}</DialogTitle>
+            <DialogDescription>{t("settings.mcp.helpDesc")}</DialogDescription>
+          </DialogHeader>
+          <DialogPanel>
+            <pre className="whitespace-pre-wrap rounded-lg border border-border bg-muted/30 p-3 font-mono text-xs leading-5 text-foreground">
+              {mcpHelpBusy ? t("settings.mcp.helpLoading") : mcpHelp}
+            </pre>
+          </DialogPanel>
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setMcpHelpOpen(false)}>{t("settings.mcp.helpClose")}</Button>
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
     </div>
   );
 }

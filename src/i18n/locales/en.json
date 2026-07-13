@@ -192,11 +192,18 @@
       "savedConfigs": "Saved configs",
       "unsaved": "Unsaved draft",
       "configName": "Config name",
+      "renameOnSave": "Saving will rename “{{oldName}}” to “{{newName}}” and migrate its jobs and run history.",
+      "discardTitle": "Discard Orden changes?",
+      "discardConfirm": "Configuration “{{name}}” has unsaved changes. Return to the configuration center?",
+      "discard": "Discard changes",
       "nameRequired": "Config name is required",
       "loadError": "Failed to load config",
       "save": "Save",
       "saveSuccess": "Config saved",
       "saveError": "Failed to save config",
+      "duplicate": "Duplicate",
+      "duplicateSuccess": "Created copy “{{name}}”",
+      "duplicateError": "Failed to duplicate config",
       "delete": "Delete",
       "deleteSuccess": "Config deleted",
       "deleteError": "Failed to delete config",
@@ -406,8 +413,15 @@
           "show_password": "Show password", "hide_password": "Hide password", "auto": "Auto detect",
           "zip": "ZIP", "7z": "7-Zip", "rar": "RAR", "append": "Append", "prepend": "Prepend",
           "overwrite": "Overwrite", "older": "Older", "newer": "Newer", "copy": "Copied file",
-          "original": "Original file", "first_seen": "First seen", "last_seen": "Last seen"
+          "original": "Original file", "first_seen": "First seen", "last_seen": "Last seen",
+          "skip": "Skip", "trash": "Move to trash", "rename_new": "Rename new item",
+          "rename_existing": "Rename existing item", "deduplicate": "Deduplicate", "created": "Created time",
+          "lastmodified": "Modified time"
         },
+        "senders": {
+          "rule": "Rule", "walker": "Directory scan", "filter": "Filter", "action": "Action", "preview": "Preview"
+        },
+        "levels": { "info": "Info", "warn": "Warning", "error": "Error", "debug": "Debug" },
         "steps": {
           "extension": { "label": "File type", "hint": "Match extensions such as PDF or PNG" },
           "name": { "label": "File name", "hint": "Match a name or wildcard pattern" },
@@ -593,7 +607,12 @@
       "copyConfig": "Copy Config",
       "copySuccess": "MCP config copied",
       "copyError": "Failed to copy MCP config",
-      "clientConfig": "Client config"
+      "clientConfig": "Client config",
+      "help": "Guide",
+      "helpTitle": "MCP Guide",
+      "helpDesc": "Review startup commands, tools, the Orden rule model, and safety guidance. Also available through shelfy --mcp --help.",
+      "helpLoading": "Loading guide…",
+      "helpClose": "Close"
     },
     "config": {
       "title": "Configuration",

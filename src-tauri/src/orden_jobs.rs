@@ -124,6 +124,7 @@ pub fn run_job_result(job: &OrdenJob, _trigger: &str) -> Result<crate::orden::Ru
         tags: split_csv(&job.tags).into_iter().collect(),
         skip_tags: split_csv(&job.skip_tags).into_iter().collect(),
         working_dir: std::env::current_dir().unwrap_or_default(),
+        preview: None,
     };
     crate::orden::run_yaml(&yaml, &opts)
 }

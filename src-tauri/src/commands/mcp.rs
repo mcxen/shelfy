@@ -8,6 +8,11 @@ pub struct McpClientConfig {
 }
 
 #[tauri::command]
+pub fn mcp_help_cmd(language: Option<String>) -> String {
+    crate::mcp::help_text(language.as_deref()).to_string()
+}
+
+#[tauri::command]
 pub fn mcp_client_config_cmd() -> Result<McpClientConfig, String> {
     let settings = get_settings().map_err(|e| e.to_string())?;
     let server_name = clean_mcp_server_name(&settings.mcp_server_name);

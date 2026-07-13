@@ -197,6 +197,12 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] Orden 配置中心仅预取每份配置最近一次结果，进入详情后再加载完整历史与 YAML
 - [x] Popup 后台轮询从 5 秒全量刷新拆为 15 秒 pending / 60 秒 Orden tasks，并在窗口失焦时停止
 - [x] Orden 手动/任务执行改为独立 worker 线程，Tauri 通过任务句柄轮询结果；scheduler/watcher/CLI/MCP 也不再在调用线程直接执行规则
+- [x] Orden GUI 模拟改为有扫描预算的快速预览，每条规则最多扫描 500 个目录项、整份配置展示 10 个匹配，并强制跳过 Shell 外部命令
+- [x] Orden 配置名支持中文等 Unicode 字母/数字，保存、读取、删除统一安全规范化与扩展名处理
+- [x] MCP 增加 `--help` 操作指南，并在 Settings 复用同一份本地化指南展示启动、工具、安全边界与 Orden 多规则模型
+- [x] Orden 编辑器绑定当前配置并移除切换下拉框；支持迁移任务/历史/YAML 的真实重命名，修正模拟返回路径、删除返回状态并增加未保存退出保护
+- [x] 补齐 Orden Action 类型、冲突操作、日志 sender/level、详情预览与 Popup 快捷任务的 i18n 显示
+- [x] Orden 配置支持一键复制并生成独立自增 ID；MCP 增加 `shelfy_save_orden_config`，手写 YAML 仅提交名称和内容，由后端维护 ID
 - [x] 移除未使用的隐藏 `main` WebView，自启动保持零窗口直到用户打开 UI
 - [x] tray 菜单增加监控状态、主面板、立即整理、Orden 自动化、监控目录和设置；语言/文件夹变化时刷新
 - [x] 除 Tray 小松鼠外，桌面端、移动端、安装包、网页 favicon 与界面品牌标记统一替换为松果圆角矩形图标

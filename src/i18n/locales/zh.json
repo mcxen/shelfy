@@ -192,11 +192,18 @@
       "savedConfigs": "已保存配置",
       "unsaved": "未保存草稿",
       "configName": "配置名称",
+      "renameOnSave": "保存后会将“{{oldName}}”重命名为“{{newName}}”，关联任务与运行历史会同步迁移。",
+      "discardTitle": "舍弃 Orden 修改？",
+      "discardConfirm": "配置“{{name}}”有尚未保存的修改，确定返回配置中心吗？",
+      "discard": "舍弃修改",
       "nameRequired": "必须填写配置名称",
       "loadError": "加载配置失败",
       "save": "保存",
       "saveSuccess": "配置已保存",
       "saveError": "保存配置失败",
+      "duplicate": "复制配置",
+      "duplicateSuccess": "已创建副本“{{name}}”",
+      "duplicateError": "复制配置失败",
       "delete": "删除",
       "deleteSuccess": "配置已删除",
       "deleteError": "删除配置失败",
@@ -406,8 +413,15 @@
           "no_parameters": "此动作无需额外参数", "show_password": "显示密码", "hide_password": "隐藏密码",
           "auto": "自动识别", "zip": "ZIP", "7z": "7-Zip", "rar": "RAR",
           "append": "追加", "prepend": "前置", "overwrite": "覆盖", "older": "早于", "newer": "晚于",
-          "copy": "复制后的文件", "original": "原文件", "first_seen": "最先发现", "last_seen": "最后发现"
+          "copy": "复制后的文件", "original": "原文件", "first_seen": "最先发现", "last_seen": "最后发现",
+          "skip": "跳过", "trash": "移到废纸篓", "rename_new": "重命名新项目",
+          "rename_existing": "重命名已有项目", "deduplicate": "去重", "created": "创建时间",
+          "lastmodified": "修改时间"
         },
+        "senders": {
+          "rule": "规则", "walker": "目录扫描", "filter": "筛选器", "action": "动作", "preview": "预览"
+        },
+        "levels": { "info": "信息", "warn": "警告", "error": "错误", "debug": "调试" },
         "steps": {
           "extension": { "label": "文件类型", "hint": "按 PDF、PNG 等扩展名匹配" },
           "name": { "label": "文件名", "hint": "按名称或通配符匹配" },
@@ -593,7 +607,12 @@
       "copyConfig": "复制配置",
       "copySuccess": "MCP 配置已复制",
       "copyError": "复制 MCP 配置失败",
-      "clientConfig": "客户端配置"
+      "clientConfig": "客户端配置",
+      "help": "操作指南",
+      "helpTitle": "MCP 操作指南",
+      "helpDesc": "查看启动方式、工具列表、Orden 规则模型和安全建议。命令行也可使用 shelfy --mcp --help。",
+      "helpLoading": "正在加载操作指南…",
+      "helpClose": "关闭"
     },
     "config": {
       "title": "配置",

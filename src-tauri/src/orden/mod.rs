@@ -54,12 +54,30 @@ pub struct ReportSummary {
     pub errors: u64,
 }
 
+#[derive(Debug, Clone, Copy)]
+pub struct PreviewOptions {
+    pub max_scan_entries: usize,
+    pub max_matches: u64,
+}
+
+impl Default for PreviewOptions {
+    fn default() -> Self {
+        Self {
+            max_scan_entries: 500,
+            max_matches: 10,
+        }
+    }
+}
+
 /// Execution options for `Config::execute`.
+#[derive(Clone)]
 pub struct ExecuteOptions {
     pub simulate: bool,
     pub tags: HashSet<String>,
     pub skip_tags: HashSet<String>,
     pub working_dir: PathBuf,
+    /// Bounded, side-effect-free GUI preview. CLI/MCP simulations remain exhaustive.
+    pub preview: Option<PreviewOptions>,
 }
 
 impl Default for ExecuteOptions {
@@ -69,6 +87,7 @@ impl Default for ExecuteOptions {
             tags: HashSet::new(),
             skip_tags: HashSet::new(),
             working_dir: PathBuf::from("."),
+            preview: None,
         }
     }
 }
@@ -298,7 +317,13 @@ impl Rule {
         };
 
         let mut skip_pathes: HashSet<PathBuf> = HashSet::new();
-        for loc in &self.locations {
+        let mut scan_budget = opts
+            .preview
+            .map(|preview| preview.max_scan_entries)
+            .unwrap_or(usize::MAX);
+        let mut scanned_entries = 0usize;
+        let mut preview_truncated = false;
+        'locations: for loc in &self.locations {
             let max_depth = match loc.max_depth {
                 MaxDepth::Inherit => {
                     if self.subfolders {
@@ -323,6 +348,10 @@ impl Rule {
                 exclude_files: loc.combined_exclude_files(),
             };
             for path_str in &loc.paths {
+                if scan_budget == 0 {
+                    preview_truncated = true;
+                    break 'locations;
+                }
                 let expanded = match template::render(path_str, &template::map_from(vec![])) {
                     Ok(p) => p,
                     Err(e) => {
@@ -351,10 +380,18 @@ impl Rule {
                     "walker",
                     Level::Info,
                 );
-                let (entries, walk_errors) = match self.targets {
-                    Targets::Files => walker.files_with_errors(&base.to_string_lossy()),
-                    Targets::Dirs => walker.dirs_with_errors(&base.to_string_lossy()),
-                };
+                let budget_before_walk = scan_budget;
+                let (entries, walk_errors) =
+                    match self.targets {
+                        Targets::Files => walker
+                            .files_with_errors_budget(&base.to_string_lossy(), &mut scan_budget),
+                        Targets::Dirs => walker
+                            .dirs_with_errors_budget(&base.to_string_lossy(), &mut scan_budget),
+                    };
+                scanned_entries += budget_before_walk.saturating_sub(scan_budget);
+                if opts.preview.is_some() && scan_budget == 0 {
+                    preview_truncated = true;
+                }
                 output.msg(
                     &location_resource,
                     &format!("Found {} candidate items", entries.len()),
@@ -397,6 +434,13 @@ impl Rule {
                                 skip_pathes.insert(sp.clone());
                             }
                             summary.success += 1;
+                            if opts
+                                .preview
+                                .is_some_and(|preview| summary.success >= preview.max_matches)
+                            {
+                                preview_truncated = true;
+                                break 'locations;
+                            }
                         }
                         Err(e) => {
                             output.msg(&res, &e, "action", Level::Error);
@@ -405,6 +449,17 @@ impl Rule {
                     }
                 }
             }
+        }
+        if preview_truncated {
+            output.msg(
+                &rule_resource,
+                &format!(
+                    "Preview stopped after scanning {} entries / {} matches",
+                    scanned_entries, summary.success
+                ),
+                "preview",
+                Level::Info,
+            );
         }
         output.msg(
             &rule_resource,
@@ -445,6 +500,15 @@ impl Rule {
         output: &dyn Output,
     ) -> Result<(), String> {
         for action in actions.iter_mut() {
+            if opts.preview.is_some() && action.name() == "shell" {
+                output.msg(
+                    res,
+                    "Shell command skipped in preview",
+                    action.name(),
+                    Level::Info,
+                );
+                continue;
+            }
             match action.pipeline_with_output(res, opts.simulate, output) {
                 Ok(()) => {
                     output.msg(
@@ -467,6 +531,12 @@ impl Config {
     pub fn execute(&self, opts: &ExecuteOptions, output: &dyn Output) -> ReportSummary {
         let mut summary = ReportSummary::default();
         for (i, rule) in self.rules.iter().enumerate() {
+            if opts
+                .preview
+                .is_some_and(|preview| summary.success >= preview.max_matches)
+            {
+                break;
+            }
             if !should_execute(&rule.tags, &opts.tags, &opts.skip_tags) {
                 output.msg(
                     &Resource::standalone(i as i64, rule.name.clone()),
@@ -476,7 +546,11 @@ impl Config {
                 );
                 continue;
             }
-            let s = rule.execute(i as i64, opts, output);
+            let mut rule_opts = opts.clone();
+            if let Some(preview) = rule_opts.preview.as_mut() {
+                preview.max_matches = preview.max_matches.saturating_sub(summary.success);
+            }
+            let s = rule.execute(i as i64, &rule_opts, output);
             summary.success += s.success;
             summary.errors += s.errors;
         }
@@ -508,24 +582,39 @@ pub fn configs_dir(data_dir: &std::path::Path) -> std::path::PathBuf {
     data_dir.join("orden")
 }
 
-fn config_path(data_dir: &std::path::Path, name: &str) -> Result<std::path::PathBuf, String> {
-    let trimmed = name
-        .trim()
-        .trim_end_matches(".yaml")
-        .trim_end_matches(".yml");
-    if trimmed.is_empty() {
+pub fn normalize_config_name(name: &str) -> Result<String, String> {
+    let trimmed = name.trim();
+    let lower = trimmed.to_lowercase();
+    let clean = if lower.ends_with(".yaml") {
+        &trimmed[..trimmed.len() - ".yaml".len()]
+    } else if lower.ends_with(".yml") {
+        &trimmed[..trimmed.len() - ".yml".len()]
+    } else {
+        trimmed
+    };
+    if clean.is_empty() {
         return Err("Config name cannot be empty".into());
     }
-    if trimmed.contains('/') || trimmed.contains('\\') || trimmed.contains("..") {
+    if clean == "."
+        || clean == ".."
+        || clean.contains('/')
+        || clean.contains('\\')
+        || clean.contains("..")
+    {
         return Err("Config name cannot contain path separators".into());
     }
-    if !trimmed
+    if !clean
         .chars()
-        .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+        .all(|c| c.is_alphanumeric() || c == '-' || c == '_')
     {
-        return Err("Config name can only contain letters, numbers, '-' and '_'".into());
+        return Err("Config name can only contain Unicode letters, numbers, '-' and '_'".into());
     }
-    Ok(configs_dir(data_dir).join(format!("{}.yaml", trimmed)))
+    Ok(clean.to_string())
+}
+
+fn config_path(data_dir: &std::path::Path, name: &str) -> Result<std::path::PathBuf, String> {
+    let clean = normalize_config_name(name)?;
+    Ok(configs_dir(data_dir).join(format!("{}.yaml", clean)))
 }
 
 /// List available orden config names (file stems) under the data dir.
@@ -558,6 +647,33 @@ pub fn save_config_text(data_dir: &std::path::Path, name: &str, yaml: &str) -> R
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = config_path(data_dir, name)?;
     std::fs::write(&path, yaml).map_err(|e| e.to_string())
+}
+
+pub fn rename_config_text(
+    data_dir: &std::path::Path,
+    old_name: &str,
+    new_name: &str,
+    yaml: &str,
+) -> Result<(), String> {
+    let old_path = config_path(data_dir, old_name)?;
+    let new_path = config_path(data_dir, new_name)?;
+    if old_path == new_path {
+        return std::fs::write(old_path, yaml).map_err(|e| e.to_string());
+    }
+    if new_path.exists() {
+        return Err(format!(
+            "Orden config '{}' already exists",
+            normalize_config_name(new_name)?
+        ));
+    }
+    std::fs::write(&new_path, yaml).map_err(|e| e.to_string())?;
+    if old_path.exists() {
+        if let Err(error) = std::fs::remove_file(&old_path) {
+            let _ = std::fs::remove_file(&new_path);
+            return Err(error.to_string());
+        }
+    }
+    Ok(())
 }
 
 /// Delete a config by name.
@@ -688,6 +804,57 @@ rules:
     }
 
     #[test]
+    fn preview_limits_matches_and_never_runs_shell_commands() {
+        let root = std::env::temp_dir().join(format!(
+            "shelfy-orden-preview-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let source = root.join("source");
+        let marker = root.join("shell-ran");
+        std::fs::create_dir_all(&source).unwrap();
+        for index in 0..20 {
+            std::fs::write(source.join(format!("{index:02}.txt")), b"test").unwrap();
+        }
+        let yaml = format!(
+            r#"
+rules:
+  - locations: "{}"
+    actions:
+      - shell:
+          cmd: "touch '{}'"
+          run_in_simulation: true
+"#,
+            source.display(),
+            marker.display()
+        );
+
+        let result = run_yaml(
+            &yaml,
+            &ExecuteOptions {
+                simulate: true,
+                preview: Some(PreviewOptions {
+                    max_scan_entries: 20,
+                    max_matches: 3,
+                }),
+                ..ExecuteOptions::default()
+            },
+        )
+        .unwrap();
+
+        assert_eq!(result.success, 3);
+        assert!(!marker.exists());
+        assert!(result
+            .logs
+            .iter()
+            .any(|log| log.msg.contains("Shell command skipped in preview")));
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
     fn test_parse_simple_config() {
         let yaml = r#"
 rules:
@@ -704,5 +871,45 @@ rules:
         assert_eq!(cfg.rules[0].name.as_deref(), Some("Test"));
         assert_eq!(cfg.rules[0].filter_defs.len(), 1);
         assert_eq!(cfg.rules[0].action_defs.len(), 1);
+    }
+
+    #[test]
+    fn unicode_config_names_round_trip_on_disk() {
+        let root = std::env::temp_dir().join(format!(
+            "shelfy-orden-unicode-name-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let yaml = "rules: []\n";
+
+        save_config_text(&root, "整理下载.YAML", yaml).unwrap();
+        assert_eq!(load_config_text(&root, "整理下载").unwrap(), yaml);
+        assert_eq!(list_config_names(&root), vec!["整理下载"]);
+        delete_config(&root, "整理下载.yml").unwrap();
+        assert!(list_config_names(&root).is_empty());
+        assert!(normalize_config_name("../整理下载").is_err());
+        let _ = std::fs::remove_dir_all(root);
+    }
+
+    #[test]
+    fn unicode_config_names_can_be_renamed_without_leaving_a_copy() {
+        let root = std::env::temp_dir().join(format!(
+            "shelfy-orden-unicode-rename-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let yaml = "rules: []\n";
+        save_config_text(&root, "整理下载", yaml).unwrap();
+        rename_config_text(&root, "整理下载", "整理文档", yaml).unwrap();
+        assert_eq!(list_config_names(&root), vec!["整理文档"]);
+        assert!(load_config_text(&root, "整理下载").is_err());
+        assert_eq!(load_config_text(&root, "整理文档").unwrap(), yaml);
+        let _ = std::fs::remove_dir_all(root);
     }
 }

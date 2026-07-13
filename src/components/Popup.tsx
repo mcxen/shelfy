@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { ordenOperationLabel } from "../lib/ordenI18n";
 
 function getIconForType(typeName: string) {
   const lower = typeName.toLowerCase();
@@ -238,7 +239,7 @@ export default function Popup() {
                         {!task.enabled && <Badge variant="secondary">{t("popup.disabled")}</Badge>}
                       </div>
                       <div className="mt-0.5 truncate text-[10px] text-muted-foreground">
-                        {task.action} · {task.location || task.configName}
+                        {ordenOperationLabel(t, task.action)} · {task.location || task.configName}
                       </div>
                     </div>
                     <Button

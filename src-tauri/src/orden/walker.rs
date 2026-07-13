@@ -71,13 +71,26 @@ impl Walker {
     }
 
     pub fn files_with_errors(&self, path: &str) -> (Vec<PathBuf>, Vec<WalkError>) {
+        let mut budget = usize::MAX;
+        self.files_with_errors_budget(path, &mut budget)
+    }
+
+    pub fn files_with_errors_budget(
+        &self,
+        path: &str,
+        scan_budget: &mut usize,
+    ) -> (Vec<PathBuf>, Vec<WalkError>) {
+        if *scan_budget == 0 {
+            return (Vec::new(), Vec::new());
+        }
         // a single file is emitted as-is
         if Path::new(path).is_file() {
+            *scan_budget -= 1;
             return (vec![PathBuf::from(path)], Vec::new());
         }
         let mut out = Vec::new();
         let mut errors = Vec::new();
-        self.walk(path, true, false, 0, &mut out, &mut errors);
+        self.walk(path, true, false, 0, scan_budget, &mut out, &mut errors);
         (out, errors)
     }
 
@@ -86,9 +99,21 @@ impl Walker {
     }
 
     pub fn dirs_with_errors(&self, path: &str) -> (Vec<PathBuf>, Vec<WalkError>) {
+        let mut budget = usize::MAX;
+        self.dirs_with_errors_budget(path, &mut budget)
+    }
+
+    pub fn dirs_with_errors_budget(
+        &self,
+        path: &str,
+        scan_budget: &mut usize,
+    ) -> (Vec<PathBuf>, Vec<WalkError>) {
+        if *scan_budget == 0 {
+            return (Vec::new(), Vec::new());
+        }
         let mut out = Vec::new();
         let mut errors = Vec::new();
-        self.walk(path, false, true, 0, &mut out, &mut errors);
+        self.walk(path, false, true, 0, scan_budget, &mut out, &mut errors);
         (out, errors)
     }
 
@@ -98,9 +123,13 @@ impl Walker {
         files: bool,
         dirs: bool,
         lvl: i32,
+        scan_budget: &mut usize,
         out: &mut Vec<PathBuf>,
         errors: &mut Vec<WalkError>,
     ) {
+        if *scan_budget == 0 {
+            return;
+        }
         let entries = match std::fs::read_dir(top) {
             Ok(e) => e,
             Err(error) => {
@@ -117,6 +146,10 @@ impl Walker {
         let mut file_entries: Vec<PathBuf> = Vec::new();
 
         for entry in entries.flatten() {
+            if *scan_budget == 0 {
+                break;
+            }
+            *scan_budget -= 1;
             let path = entry.path();
             // skip symlinks (organize behaviour)
             if path.is_symlink() {
@@ -163,7 +196,18 @@ impl Walker {
                     }
                 }
                 for d in dir_entries {
-                    self.walk(&d.to_string_lossy(), files, dirs, lvl + 1, out, errors);
+                    self.walk(
+                        &d.to_string_lossy(),
+                        files,
+                        dirs,
+                        lvl + 1,
+                        scan_budget,
+                        out,
+                        errors,
+                    );
+                    if *scan_budget == 0 {
+                        return;
+                    }
                 }
             }
             WalkMethod::Depth => {
@@ -179,17 +223,24 @@ impl Walker {
                     }
                 }
                 for d in dir_entries.iter() {
-                    self.walk(&d.to_string_lossy(), files, dirs, lvl + 1, out, errors);
+                    self.walk(
+                        &d.to_string_lossy(),
+                        files,
+                        dirs,
+                        lvl + 1,
+                        scan_budget,
+                        out,
+                        errors,
+                    );
+                    if *scan_budget == 0 {
+                        return;
+                    }
                 }
                 if files {
                     out.extend(file_entries);
                 }
                 if dirs && lvl >= self.min_depth {
-                    let already = out.len();
                     out.extend(dir_entries.iter().cloned());
-                    // depth-first already yielded subdirs above; here we only yield
-                    // the current-level dirs that haven't been emitted.
-                    out.truncate(already + dir_entries.len());
                 }
             }
         }
@@ -214,5 +265,29 @@ mod tests {
         assert!(files.is_empty());
         assert_eq!(errors.len(), 1);
         assert_eq!(errors[0].path, path);
+    }
+
+    #[test]
+    fn limited_walk_stops_after_requested_candidates() {
+        let root = std::env::temp_dir().join(format!(
+            "shelfy-walker-limit-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&root).unwrap();
+        for index in 0..20 {
+            std::fs::write(root.join(format!("{index:02}.txt")), b"test").unwrap();
+        }
+
+        let mut budget = 5;
+        let (files, errors) =
+            Walker::default().files_with_errors_budget(&root.to_string_lossy(), &mut budget);
+        assert_eq!(files.len(), 5);
+        assert_eq!(budget, 0);
+        assert!(errors.is_empty());
+        let _ = std::fs::remove_dir_all(root);
     }
 }

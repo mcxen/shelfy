@@ -6,6 +6,7 @@ import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../ui/table";
 import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { ordenLevelLabel, ordenOperationLabel } from "../../lib/ordenI18n";
 
 interface OrdenRunHistoryTableProps {
   rows: OrdenRunHistory[];
@@ -171,10 +172,10 @@ export function OrdenRunHistoryTable({
                                     {index + 1}
                                   </span>
                                   <Badge variant={log.level === "error" ? "destructive" : "outline"} className="w-fit">
-                                    {log.level}
+                                    {ordenLevelLabel(t, log.level)}
                                   </Badge>
                                   <span className="text-muted-foreground">
-                                    {log.sender} · #{log.rule_nr + 1}
+                                    {ordenOperationLabel(t, log.sender)} · #{log.rule_nr + 1}
                                   </span>
                                   <div className="min-w-0">
                                     <div className="break-all font-mono text-[11px] text-muted-foreground">{log.path}</div>
@@ -223,7 +224,7 @@ export function OrdenRunHistoryTable({
                 {isExpanded && <div className="mt-3 border-t border-border pt-2">
                   {logs.length === 0 ? <div className="py-2 text-xs text-muted-foreground">{t("settings.orden.noLogs")}</div> : <div className="divide-y divide-border">
                     {logs.map((log, index) => <div key={`${key}-${index}`} className="py-2 text-xs">
-                      <div className="flex flex-wrap items-center gap-1.5"><span className={log.level === "error" ? "text-destructive" : "text-muted-foreground"}>#{index + 1}</span><Badge variant={log.level === "error" ? "destructive" : "outline"} className="w-fit">{log.level}</Badge><span className="text-muted-foreground">{log.sender} · #{log.rule_nr + 1}</span></div>
+                      <div className="flex flex-wrap items-center gap-1.5"><span className={log.level === "error" ? "text-destructive" : "text-muted-foreground"}>#{index + 1}</span><Badge variant={log.level === "error" ? "destructive" : "outline"} className="w-fit">{ordenLevelLabel(t, log.level)}</Badge><span className="text-muted-foreground">{ordenOperationLabel(t, log.sender)} · #{log.rule_nr + 1}</span></div>
                       <div className="mt-1 break-all font-mono text-[11px] text-muted-foreground">{log.path}</div><div className="mt-1 break-words">{log.msg}</div>
                     </div>)}
                   </div>}

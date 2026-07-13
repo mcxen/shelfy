@@ -48,6 +48,7 @@ Shelfy can expose local tools to AI clients that support the Model Context Proto
 
 ```bash
 shelfy --mcp
+shelfy --mcp --help
 shelfy --cli mcp
 ```
 
@@ -56,7 +57,10 @@ Available MCP tools include:
 - `shelfy_list_folders`
 - `shelfy_list_rules`
 - `shelfy_recent_logs`
+- `shelfy_list_orden_configs`
+- `shelfy_get_orden_config`
 - `shelfy_orden_simulate`
+- `shelfy_save_orden_config` when write tools are enabled
 - `shelfy_scan_folder` when write tools are enabled
 - `shelfy_orden_run` when write tools are enabled
 

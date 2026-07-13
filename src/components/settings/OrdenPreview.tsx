@@ -6,6 +6,7 @@ import { buildOrdenPreviewRows } from "./utils";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
+import { ordenLevelLabel, ordenOperationLabel } from "../../lib/ordenI18n";
 
 interface OrdenPreviewProps {
   ordenResult: OrdenRunResult | null;
@@ -64,8 +65,8 @@ export function OrdenPreview({ ordenResult, ordenPreviewError, onBack }: OrdenPr
                   <div key={row.id} className="px-3 py-2 text-xs">
                     <div className="font-medium text-foreground">{row.source}</div>
                     <div className="mt-1 flex items-center gap-2 text-muted-foreground">
-                      <Badge variant={row.level === "error" ? "destructive" : "secondary"}>{row.action}</Badge>
-                      <span>{row.level}</span>
+                      <Badge variant={row.level === "error" ? "destructive" : "secondary"}>{ordenOperationLabel(t, row.action)}</Badge>
+                      <span>{ordenLevelLabel(t, row.level)}</span>
                     </div>
                   </div>
                 ))}
@@ -111,8 +112,8 @@ export function OrdenPreview({ ordenResult, ordenPreviewError, onBack }: OrdenPr
                 {ordenResult.logs.map((log, idx) => (
                   <div key={idx} className="grid gap-1 px-3 py-2 text-xs md:grid-cols-[2.5rem_5rem_7rem_minmax(0,1fr)]">
                     <span className="text-muted-foreground">{idx + 1}</span>
-                    <span className={log.level === "error" ? "text-destructive" : "text-muted-foreground"}>{log.level}</span>
-                    <span className="text-muted-foreground">{log.sender} · #{log.rule_nr + 1}</span>
+                    <span className={log.level === "error" ? "text-destructive" : "text-muted-foreground"}>{ordenLevelLabel(t, log.level)}</span>
+                    <span className="text-muted-foreground">{ordenOperationLabel(t, log.sender)} · #{log.rule_nr + 1}</span>
                     <div className="min-w-0">
                       <div className="break-all font-mono text-[11px] text-muted-foreground">{log.path}</div>
                       <div className="mt-1 break-words text-foreground">{log.msg}</div>

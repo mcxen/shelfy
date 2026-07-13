@@ -158,6 +158,26 @@ pub fn upsert_orden_config(name: &str, yaml: &str) -> SqliteResult<()> {
     Ok(())
 }
 
+pub fn rename_orden_config(old_name: &str, new_name: &str, yaml: &str) -> SqliteResult<()> {
+    let db = get_db();
+    let mut conn = db.lock().unwrap();
+    let transaction = conn.transaction()?;
+    let now = Utc::now().to_rfc3339();
+    transaction.execute(
+        "UPDATE orden_configs SET name=?1, yaml=?2, updated_at=?3 WHERE name=?4",
+        params![new_name, yaml, now, old_name],
+    )?;
+    transaction.execute(
+        "UPDATE orden_jobs SET config_name=?1, updated_at=?2 WHERE config_name=?3",
+        params![new_name, now, old_name],
+    )?;
+    transaction.execute(
+        "UPDATE orden_run_logs SET config_name=?1 WHERE config_name=?2",
+        params![new_name, old_name],
+    )?;
+    transaction.commit()
+}
+
 pub fn delete_orden_config(name: &str) -> SqliteResult<()> {
     let db = get_db();
     let conn = db.lock().unwrap();

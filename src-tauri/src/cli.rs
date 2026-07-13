@@ -17,7 +17,11 @@ struct ConfigPaths {
 
 pub fn try_run_from_env() -> bool {
     let mut args: Vec<String> = env::args().skip(1).collect();
-    if args.iter().any(|arg| arg == "--mcp") {
+    if let Some(mcp_index) = args.iter().position(|arg| arg == "--mcp") {
+        if args[mcp_index + 1..].iter().any(|arg| is_help_arg(arg)) {
+            println!("{}", crate::mcp::help_text_from_env());
+            return true;
+        }
         if let Err(error) = init_cli_storage().and_then(|_| crate::mcp::run_stdio()) {
             eprintln!("{error}");
             std::process::exit(2);
@@ -50,7 +54,13 @@ fn run(args: Vec<String>) -> Result<(), String> {
         Some("folders") => run_folders(&args[1..])?,
         Some("config") => run_config(&args[1..], data_dir)?,
         Some("orden") | Some("organize") => run_orden(&args[1..])?,
-        Some("mcp") => crate::mcp::run_stdio()?,
+        Some("mcp") => {
+            if args.get(1).is_some_and(|arg| is_help_arg(arg)) {
+                println!("{}", crate::mcp::help_text_from_env());
+            } else {
+                crate::mcp::run_stdio()?;
+            }
+        }
         Some("help") | None => print_usage(),
         Some(command) => return Err(format!("Unknown CLI command: {command}\n\n{}", usage())),
     }
@@ -191,6 +201,7 @@ fn run_orden(args: &[String]) -> Result<(), String> {
         tags,
         skip_tags,
         working_dir: std::env::current_dir().unwrap_or_default(),
+        preview: None,
     };
     let summary = std::thread::Builder::new()
         .name("orden-cli".to_string())
@@ -271,6 +282,10 @@ fn parse_i64(value: &str) -> Result<i64, String> {
         .map_err(|_| format!("Invalid number: {value}"))
 }
 
+fn is_help_arg(value: &str) -> bool {
+    value == "--help" || value == "-h" || value == "help"
+}
+
 fn print_json<T: Serialize>(value: &T) -> Result<(), String> {
     let json = serde_json::to_string_pretty(value).map_err(|e| e.to_string())?;
     println!("{json}");
@@ -311,5 +326,19 @@ Usage:
   shelfy --cli orden run <config> [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
   shelfy --cli orden check <config>
   shelfy --mcp
-  shelfy --cli mcp"
+  shelfy --mcp --help
+  shelfy --cli mcp [--help]"
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn recognizes_mcp_help_aliases() {
+        assert!(is_help_arg("--help"));
+        assert!(is_help_arg("-h"));
+        assert!(is_help_arg("help"));
+        assert!(!is_help_arg("--mcp"));
+    }
 }

@@ -377,6 +377,8 @@ interface AppState {
   ordenList: () => Promise<string[]>;
   ordenLoad: (name: string) => Promise<string>;
   ordenSave: (name: string, yaml: string) => Promise<void>;
+  ordenRename: (oldName: string, newName: string, yaml: string) => Promise<void>;
+  ordenDuplicate: (sourceName: string, yaml?: string) => Promise<string>;
   ordenDelete: (name: string) => Promise<void>;
   ordenTemplateList: () => Promise<OrdenTemplate[]>;
   ordenTemplateLoad: (name: string) => Promise<string>;
@@ -394,6 +396,7 @@ interface AppState {
   ordenRunJob: (job: OrdenJob) => Promise<OrdenRunResult>;
   cancelOrdenTask: () => void;
   getMcpClientConfig: () => Promise<McpClientConfig>;
+  getMcpHelp: (language: string) => Promise<string>;
   getOrdenQuickTasks: () => Promise<OrdenQuickTask[]>;
   runOrdenQuickTask: (yaml: string, simulate: boolean) => Promise<OrdenRunResult>;
 }
@@ -647,6 +650,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   ordenSave: async (name, yaml) => {
     await invoke('orden_save_cmd', { name, yaml });
   },
+  ordenRename: async (oldName, newName, yaml) => {
+    await invoke('orden_rename_cmd', { oldName, newName, yaml });
+  },
+  ordenDuplicate: async (sourceName, yaml) => {
+    return await invoke<string>('orden_duplicate_cmd', { sourceName, yaml: yaml || null });
+  },
   ordenDelete: async (name) => {
     await invoke('orden_delete_cmd', { name });
   },
@@ -697,6 +706,9 @@ export const useAppStore = create<AppState>((set, get) => ({
   cancelOrdenTask: () => { ordenTaskAbort?.abort(); },
   getMcpClientConfig: async () => {
     return await invoke<McpClientConfig>('mcp_client_config_cmd');
+  },
+  getMcpHelp: async (language) => {
+    return await invoke<string>('mcp_help_cmd', { language });
   },
   getOrdenQuickTasks: async () => {
     const names = await get().ordenList();

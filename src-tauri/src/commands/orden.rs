@@ -261,31 +261,86 @@ pub fn orden_list_cmd() -> Result<Vec<String>, String> {
 /// Load a config's YAML text by name.
 #[tauri::command]
 pub fn orden_load_cmd(name: String) -> Result<String, String> {
-    if let Some(record) = get_orden_config(&name).map_err(|e| e.to_string())? {
+    let clean = crate::orden::normalize_config_name(&name)?;
+    if let Some(record) = get_orden_config(&clean).map_err(|e| e.to_string())? {
         return Ok(record.yaml);
     }
-    let yaml = crate::orden::load_config_text(&data_dir()?, &name)?;
-    let _ = upsert_orden_config(&name, &yaml);
+    let yaml = crate::orden::load_config_text(&data_dir()?, &clean)?;
+    let _ = upsert_orden_config(&clean, &yaml);
     Ok(yaml)
 }
 
 /// Save a config's YAML text by name (creates the orden dir if needed).
 #[tauri::command]
 pub fn orden_save_cmd(name: String, yaml: String) -> Result<(), String> {
-    crate::orden::save_config_text(&data_dir()?, &name, &yaml)?;
-    let clean = name
-        .trim()
-        .trim_end_matches(".yaml")
-        .trim_end_matches(".yml")
-        .to_string();
+    let clean = crate::orden::normalize_config_name(&name)?;
+    crate::orden::save_config_text(&data_dir()?, &clean, &yaml)?;
     upsert_orden_config(&clean, &yaml).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn orden_rename_cmd(old_name: String, new_name: String, yaml: String) -> Result<(), String> {
+    let old_clean = crate::orden::normalize_config_name(&old_name)?;
+    let new_clean = crate::orden::normalize_config_name(&new_name)?;
+    if old_clean == new_clean {
+        return orden_save_cmd(new_clean, yaml);
+    }
+    if get_orden_config(&new_clean)
+        .map_err(|e| e.to_string())?
+        .is_some()
+    {
+        return Err(format!("Orden config '{}' already exists", new_clean));
+    }
+
+    let root = data_dir()?;
+    crate::orden::rename_config_text(&root, &old_clean, &new_clean, &yaml)?;
+    if let Err(error) = rename_orden_config(&old_clean, &new_clean, &yaml) {
+        let _ = crate::orden::rename_config_text(&root, &new_clean, &old_clean, &yaml);
+        return Err(error.to_string());
+    }
+    Ok(())
+}
+
+fn next_orden_copy_name(source_name: &str, existing: &[String]) -> String {
+    let base = format!("{}-copy", source_name);
+    if !existing.contains(&base) {
+        return base;
+    }
+    let mut suffix = 2;
+    loop {
+        let candidate = format!("{}-{}", base, suffix);
+        if !existing.contains(&candidate) {
+            return candidate;
+        }
+        suffix += 1;
+    }
+}
+
+#[tauri::command]
+pub fn orden_duplicate_cmd(source_name: String, yaml: Option<String>) -> Result<String, String> {
+    let source_clean = crate::orden::normalize_config_name(&source_name)?;
+    let content = match yaml {
+        Some(value) => value,
+        None => orden_load_cmd(source_clean.clone())?,
+    };
+    crate::orden::Config::from_string(&content)?;
+    let existing = orden_list_cmd()?;
+    let copy_name = next_orden_copy_name(&source_clean, &existing);
+    let root = data_dir()?;
+    crate::orden::save_config_text(&root, &copy_name, &content)?;
+    if let Err(error) = upsert_orden_config(&copy_name, &content) {
+        let _ = crate::orden::delete_config(&root, &copy_name);
+        return Err(error.to_string());
+    }
+    Ok(copy_name)
 }
 
 /// Delete a config by name.
 #[tauri::command]
 pub fn orden_delete_cmd(name: String) -> Result<(), String> {
-    let _ = crate::orden::delete_config(&data_dir()?, &name);
-    delete_orden_config(&name).map_err(|e| e.to_string())
+    let clean = crate::orden::normalize_config_name(&name)?;
+    let _ = crate::orden::delete_config(&data_dir()?, &clean);
+    delete_orden_config(&clean).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -445,6 +500,7 @@ pub fn orden_run_cmd(
             tags: tags.into_iter().collect(),
             skip_tags: skip_tags.into_iter().collect(),
             working_dir: std::env::current_dir().unwrap_or_default(),
+            preview: simulate.then(crate::orden::PreviewOptions::default),
         };
         let result = match crate::orden::run_yaml(&yaml, &opts) {
             Ok(result) => result,
@@ -824,6 +880,7 @@ pub fn orden_run_job_cmd(job: OrdenJob) -> Result<crate::orden_runtime::OrdenTas
             tags: split_csv(&job.tags).into_iter().collect(),
             skip_tags: split_csv(&job.skip_tags).into_iter().collect(),
             working_dir: std::env::current_dir().unwrap_or_default(),
+            preview: job.simulate.then(crate::orden::PreviewOptions::default),
         };
         let result = match crate::orden::run_yaml(&yaml, &opts) {
             Ok(result) => result,
@@ -966,5 +1023,12 @@ rules:
         assert!(valid_template_name("").is_err());
         assert!(valid_template_name("../etc").is_err());
         assert!(valid_template_name("a/b").is_err());
+    }
+
+    #[test]
+    fn copy_names_are_unique_and_keep_unicode_source_names() {
+        let existing = vec!["整理-copy".to_string(), "整理-copy-2".to_string()];
+        assert_eq!(next_orden_copy_name("整理", &existing), "整理-copy-3");
+        assert_eq!(next_orden_copy_name("文档", &existing), "文档-copy");
     }
 }
