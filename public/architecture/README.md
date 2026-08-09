@@ -114,9 +114,21 @@ MCP 操作指南由 `src-tauri/src/mcp.rs::help_text` 统一提供：`shelfy --m
 
 `src-tauri/src/orden_jobs.rs` 负责到期判定、条件检查、并发去重和后台执行。`src-tauri/src/scheduler.rs` 负责常规定时整理、cron 与 keepalive；两者的调度事件写入 `scheduler_logs`。
 
+自动运行可启用 `require_confirmation`。启用后，定时或 monitor 触发只以 simulate 模式完成规则扫描和动作预检，并把最新匹配数、错误数、日志与扫描时间保存到 `orden_jobs`；任务列表允许查看预检快照，用户通过确认 Dialog 手动执行时才以真实模式重新扫描并运行，成功后清空待确认状态。`extract` 的预检不是浅层模拟：ZIP 会读取全部条目、校验 CRC 并试配候选密码，7z/RAR 会执行 `7z t` 试配密码；预检不创建目标目录、不解压且不删除源包。
+
+系统模板 `watch-extract-confirm` 提供该流程的可视化起点：规则 locations 是用户选择的源目录，extract `dest` 是新目录，`passwords` 是可维护且遮蔽显示的密码本，`delete_original=true` 仅在真实解压成功后生效；套用模板会同时创建 `monitor + require_confirmation` 自动运行。收到 `.7z.02/.002` 等任意后续卷时，extract 会按相同编号宽度定位 `.01/.001` 首卷，首卷缺失或卷号不连续时不删除任何卷。模板默认 `recursive=true, max_depth=3`，会继续处理本次解压新产生的内部 ZIP/7z/RAR，每层解压到内部压缩包所在目录的同名文件夹。递归不跟随符号链接，同一路径仅处理一次，总量最多 1000 个，层数限制为 1–10；达到限制时保留剩余压缩包并写 warn。修改规则源目录时，任务的 `watch_paths` 必须同步修改，二者当前不做隐式联动。
+
 后台 LaunchAgent/keepalive 使用 `--autostart` 唤醒应用。单实例回调必须识别该参数并保持窗口隐藏，只有用户主动再次打开应用或点击界面入口时才显示 Settings。
 
 macOS release 首次启动会由 `cli::ensure_cli_launcher` 创建 `~/.local/bin/shelfy` 包装器（自动附加 `--cli`），并幂等地为 zsh/bash 的 login/interactive 配置加入用户级 PATH；开发构建不修改用户 shell 配置。
+
+## 应用更新
+
+Settings → General → 软件更新提供手动检查、下载并安装，以及默认关闭的自动安装开关。`check_update_cmd` 只读取固定地址 `https://github.com/mcxen/shelfy/releases/latest/download/latest.json`；`install_update_cmd` 不接收前端提供的 URL，而是在后端重新检查清单。
+
+macOS 应用内更新与 `Casks/shelfy.rb` 共同使用稳定端点 `Shelfy_universal-apple-darwin.app.zip`，版本化 ZIP 只用于发布追踪。下载阶段校验清单中的 SHA256 和字节数，staging 阶段校验 `Shelfy.app`、`cc.shelfy.app`、版本号、主可执行文件和执行位。独立 helper 再次限制 staging/目标路径并验证已安装 bundle，等待主进程退出后在同卷保留隐藏备份，再替换、ad-hoc 重签并重启；失败时恢复旧 bundle。不可写安装不会请求提权，Homebrew 安装交由 `brew upgrade --cask --greedy-latest mcxen/shelfy/shelfy`。Windows/Linux 当前可以检查版本，但自动替换仅支持 macOS。
+
+`.github/workflows/build.yml` 在版本 tag 发布时同时上传版本化 ZIP、稳定名称 `Shelfy_universal-apple-darwin.app.zip` 和 `latest.json`。完整发布契约见 `../../docs/RELEASE_UPDATES.md`。
 
 ## 前端结构
 
@@ -148,7 +160,7 @@ Orden 编辑器一次只绑定一份配置：配置切换只能从配置中心�
 
 “复制配置”只复制规则 YAML，并以 `<原名>-copy[-N]` 建立新的 `orden_configs` 记录和自增 ID；自动化任务与运行历史不复制，避免副本创建后立即继承调度或混淆审计记录。编辑器内复制会包含当前尚未保存的规则内容，复制完成后直接打开副本。
 
-General 设置页位于 `components/settings/GeneralTab.tsx`，信息架构固定按“偏好设置 → 文件处理 → 自动化 → AI/MCP → 维护”排列。语言、主题、开机启动等简单设置在桌面端同排；宽限期和文件占用归入文件处理；固定时间、Cron、后台保活和调度日志归入自动化；更新与配置导入导出归入维护。新增通用设置时先归入现有类别，不要直接在页面末尾追加新 Card。
+General 设置页位于 `components/settings/GeneralTab.tsx`，信息架构固定按“偏好设置 → 文件处理 → 自动化 → AI/MCP → 维护”排列。页面使用 `SettingGroup / SettingRow / SectionHeading` 形成紧凑表格式布局：说明列在左、控制列在右，Switch 共用右边线，关联输入和按钮在空间允许时同排。语言、主题、开机启动在桌面端保持一行三列；宽限期和文件占用归入文件处理；固定时间、Cron、后台保活和调度日志归入自动化；更新与配置导入导出归入维护。新增通用设置时先归入现有类别，不要直接在页面末尾追加新 Card。
 
 Orden Visual 与 Source 的关系：Visual 覆盖当前 UI 可选的常用 filter/action，并序列化成 YAML；Source 是未知/高级语法的逃生入口。复杂 YAML 的未知字段与注释目前不能保证 Visual round-trip，切换前应视为可能丢失非可视化表达。
 
@@ -174,7 +186,7 @@ Orden 动作与运行过程的展示统一通过 `src/lib/ordenI18n.ts` 映射 `
 - 前端字段 schema：`src/components/settings/OrdenStepParameterEditor.tsx`
 - 默认示例：`src/components/settings/OrdenPipelineEditor.tsx::PRESETS`
 
-新增或修改 filter/action 参数时，必须同步核对这四处。类型化编辑器当前覆盖移动、复制、重命名、解压、压缩、链接、写文件、日志、Shell、废纸篓和永久删除等全部可选动作。解压使用密码候选列表 `passwords`，压缩使用单密码 `password`；密码 UI 必须遮蔽显示。
+新增或修改 filter/action 参数时，必须同步核对这四处。类型化编辑器当前覆盖移动、复制、重命名、解压、压缩、链接、写文件、日志、Shell、废纸篓和永久删除等全部可选动作。解压使用密码候选列表 `passwords`，可用 `recursive + max_depth` 有界处理内部压缩包；压缩使用单密码 `password`。密码 UI 必须遮蔽显示。
 
 短值列表统一走 `TagInput`，底层仍保存原有逗号字符串或 YAML sequence。适用范围包括配置 tags/skip-tags、规则 tags、任务 tags、extension、MIME 和其他短枚举列表。路径、命令和自由文本不要为了复用 TagInput 而强行拆分。
 
@@ -216,7 +228,7 @@ SQLite 主要数据：
 - `orden_jobs`：自动化任务。
 - `orden_run_logs`：Orden 的运行结果和结构化日志 JSON。
 - `scheduler_logs`：调度、保活与失败事件。
-- `settings`：语言、权限相关选项、MCP、cron、keepalive 等。
+- `settings`：语言、权限相关选项、自动更新、MCP、cron、keepalive 等。
 
 ## History 与撤销边界
 

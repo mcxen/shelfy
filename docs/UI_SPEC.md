@@ -35,6 +35,7 @@ Shelfy is a quiet cross-platform backup and file organizer. It supports document
 - Settings uses a fixed sidebar plus scrollable content region.
 - Tables/lists should prefer compact rows with stable icon/button dimensions.
 - Text must truncate in path-heavy rows instead of forcing layout expansion.
+- General settings use compact horizontal rows: label and description on the left, a stable right-aligned control column on the right. Switches share the right edge; related inputs and buttons stay on the same row when space permits and wrap only at narrow widths.
 
 ## Interaction
 
@@ -45,6 +46,8 @@ Shelfy is a quiet cross-platform backup and file organizer. It supports document
 - Rule editing supports priority, extension matching, optional regex pattern, destination, action, target folder scope, and enabled state.
 - Scheduler editing supports fixed daily times, 5-field cron expressions, Windows/macOS system keepalive install/remove, and scheduler log review.
 - Long-running actions must expose disabled/loading state and refresh store data after completion.
+- Application updates expose distinct checking and installing states. Automatic installation is an explicit user preference and is disabled by default.
+- Operational buttons in General use the 28–32px local Button sizes. Primary save/install actions and secondary check/validate/import actions remain visually distinct without receiving their own full-width rows.
 - Custom-decorated Settings and tray popup windows expose a visible top-center drag handle; the surrounding header whitespace remains draggable while controls remain clickable.
 - Orden run-history rows open a desktop dialog. Large structured log sets are searched client-side and rendered in pages instead of expanding hundreds of rows inline.
 - The Orden configuration center searches names and notes and renders at most six configurations per page on both table and card layouts.

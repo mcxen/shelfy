@@ -123,6 +123,8 @@ pub fn build_action(def: &ActionDef) -> Result<Box<dyn Action>, String> {
             parse_conflict(&def.value, "rename_new")?,
             parse_str(&def.value, "rename_template", "{name} {counter}{extension}"),
             parse_bool(&def.value, "autodetect_folder", true),
+            parse_bool(&def.value, "recursive", false),
+            parse_i64(&def.value, "max_depth", 3).clamp(1, 10) as usize,
         ))),
         "compress" | "archive" => Ok(Box::new(CompressArchive::new(
             as_string(&def.value, &def.name, "dest")?,

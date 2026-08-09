@@ -298,6 +298,7 @@ fn orden_job_schema() -> Value {
             "tags": {"type": "array", "items": {"type": "string"}},
             "skip_tags": {"type": "array", "items": {"type": "string"}},
             "simulate": {"type": "boolean", "default": true, "description": "Defaults to true for safety. Set false only when real file changes are intended."},
+            "require_confirmation": {"type": "boolean", "default": false, "description": "Run automatic triggers as a verified preflight and wait for a confirmed manual run before changing files."},
             "min_file_count": {"type": "integer", "minimum": 0, "default": 0},
             "path_exists": {"type": "string"},
             "time_window_start": {"type": "string", "pattern": "^[0-2][0-9]:[0-5][0-9]$"},
@@ -484,6 +485,10 @@ fn save_orden_job_tool(args: &Value) -> Result<Value, String> {
             .get("simulate")
             .and_then(Value::as_bool)
             .unwrap_or(true),
+        require_confirmation: args
+            .get("require_confirmation")
+            .and_then(Value::as_bool)
+            .unwrap_or(false),
         min_file_count: args
             .get("min_file_count")
             .and_then(Value::as_i64)
@@ -492,6 +497,10 @@ fn save_orden_job_tool(args: &Value) -> Result<Value, String> {
         time_window_start: optional_string(args, "time_window_start"),
         time_window_end: optional_string(args, "time_window_end"),
         last_run_at: None,
+        pending_success: 0,
+        pending_errors: 0,
+        pending_logs_json: "[]".into(),
+        pending_scanned_at: None,
         created_at: now,
         updated_at: now,
     };
@@ -928,11 +937,16 @@ mod tests {
             tags: String::new(),
             skip_tags: String::new(),
             simulate: true,
+            require_confirmation: false,
             min_file_count: 0,
             path_exists: None,
             time_window_start: None,
             time_window_end: None,
             last_run_at: None,
+            pending_success: 0,
+            pending_errors: 0,
+            pending_logs_json: "[]".into(),
+            pending_scanned_at: None,
             created_at: now,
             updated_at: now,
         });

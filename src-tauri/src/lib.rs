@@ -143,6 +143,46 @@ pub fn run() {
                 }
             }
 
+            // Automatic updates are opt-in and run away from startup's critical path.
+            #[cfg(not(debug_assertions))]
+            if db::get_settings().is_ok_and(|settings| settings.auto_update) {
+                let update_app = app_handle.clone();
+                std::thread::Builder::new()
+                    .name("shelfy-auto-update".into())
+                    .spawn(move || {
+                        std::thread::sleep(Duration::from_secs(20));
+                        for _ in 0..60 {
+                            let ui_visible = ["settings", "popup"].iter().any(|label| {
+                                update_app
+                                    .get_webview_window(label)
+                                    .and_then(|window| window.is_visible().ok())
+                                    .unwrap_or(false)
+                            });
+                            if !ui_visible {
+                                break;
+                            }
+                            std::thread::sleep(Duration::from_secs(30));
+                        }
+                        let ui_still_visible = ["settings", "popup"].iter().any(|label| {
+                            update_app
+                                .get_webview_window(label)
+                                .and_then(|window| window.is_visible().ok())
+                                .unwrap_or(false)
+                        });
+                        if ui_still_visible {
+                            return;
+                        }
+                        match updater::download_and_install(&update_app) {
+                            Ok(()) => {
+                                std::thread::sleep(Duration::from_millis(350));
+                                update_app.exit(0);
+                            }
+                            Err(error) => eprintln!("[updater] automatic update skipped: {error}"),
+                        }
+                    })
+                    .ok();
+            }
+
             // Start folder watcher
             let state = app.state::<AppState>();
             {

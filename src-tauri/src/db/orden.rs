@@ -43,11 +43,21 @@ pub struct OrdenJob {
     pub tags: String,
     pub skip_tags: String,
     pub simulate: bool,
+    #[serde(default)]
+    pub require_confirmation: bool,
     pub min_file_count: i64,
     pub path_exists: Option<String>,
     pub time_window_start: Option<String>,
     pub time_window_end: Option<String>,
     pub last_run_at: Option<DateTime<Utc>>,
+    #[serde(default)]
+    pub pending_success: i64,
+    #[serde(default)]
+    pub pending_errors: i64,
+    #[serde(default)]
+    pub pending_logs_json: String,
+    #[serde(default)]
+    pub pending_scanned_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
@@ -67,7 +77,8 @@ fn parse_utc_dt(value: String) -> DateTime<Utc> {
 }
 
 fn row_to_orden_job(row: &rusqlite::Row<'_>) -> SqliteResult<OrdenJob> {
-    let last_run_at: Option<String> = row.get(16)?;
+    let last_run_at: Option<String> = row.get(17)?;
+    let pending_scanned_at: Option<String> = row.get(22)?;
     Ok(OrdenJob {
         id: row.get(0)?,
         name: row.get(1)?,
@@ -81,17 +92,26 @@ fn row_to_orden_job(row: &rusqlite::Row<'_>) -> SqliteResult<OrdenJob> {
         tags: row.get(9)?,
         skip_tags: row.get(10)?,
         simulate: row.get::<_, i32>(11)? != 0,
-        min_file_count: row.get(12)?,
-        path_exists: row.get(13)?,
-        time_window_start: row.get(14)?,
-        time_window_end: row.get(15)?,
+        require_confirmation: row.get::<_, i32>(12)? != 0,
+        min_file_count: row.get(13)?,
+        path_exists: row.get(14)?,
+        time_window_start: row.get(15)?,
+        time_window_end: row.get(16)?,
         last_run_at: last_run_at.and_then(|s| {
             DateTime::parse_from_rfc3339(&s)
                 .ok()
                 .map(|dt| dt.with_timezone(&Utc))
         }),
-        created_at: parse_utc_dt(row.get::<_, String>(17)?),
-        updated_at: parse_utc_dt(row.get::<_, String>(18)?),
+        pending_success: row.get(18)?,
+        pending_errors: row.get(19)?,
+        pending_logs_json: row.get(20)?,
+        pending_scanned_at: pending_scanned_at.and_then(|s| {
+            DateTime::parse_from_rfc3339(&s)
+                .ok()
+                .map(|dt| dt.with_timezone(&Utc))
+        }),
+        created_at: parse_utc_dt(row.get::<_, String>(21)?),
+        updated_at: parse_utc_dt(row.get::<_, String>(23)?),
     })
 }
 
@@ -194,7 +214,7 @@ pub fn list_orden_jobs() -> SqliteResult<Vec<OrdenJob>> {
     let db = get_db();
     let conn = db.lock().unwrap();
     let mut stmt = conn.prepare(
-        "SELECT id, name, config_name, enabled, mode, cron_expr, fixed_time, interval_minutes, watch_paths, tags, skip_tags, simulate, min_file_count, path_exists, time_window_start, time_window_end, last_run_at, created_at, updated_at FROM orden_jobs ORDER BY name ASC",
+        "SELECT id, name, config_name, enabled, mode, cron_expr, fixed_time, interval_minutes, watch_paths, tags, skip_tags, simulate, require_confirmation, min_file_count, path_exists, time_window_start, time_window_end, last_run_at, pending_success, pending_errors, pending_logs_json, created_at, pending_scanned_at, updated_at FROM orden_jobs ORDER BY name ASC",
     )?;
     let rows = stmt.query_map([], row_to_orden_job)?.collect();
     rows
@@ -205,9 +225,9 @@ pub fn upsert_orden_job(job: &OrdenJob) -> SqliteResult<i64> {
     let conn = db.lock().unwrap();
     let now = Utc::now().to_rfc3339();
     conn.execute(
-        "INSERT INTO orden_jobs (name, config_name, enabled, mode, cron_expr, fixed_time, interval_minutes, watch_paths, tags, skip_tags, simulate, min_file_count, path_exists, time_window_start, time_window_end, last_run_at, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?17)
-         ON CONFLICT(name) DO UPDATE SET config_name=excluded.config_name, enabled=excluded.enabled, mode=excluded.mode, cron_expr=excluded.cron_expr, fixed_time=excluded.fixed_time, interval_minutes=excluded.interval_minutes, watch_paths=excluded.watch_paths, tags=excluded.tags, skip_tags=excluded.skip_tags, simulate=excluded.simulate, min_file_count=excluded.min_file_count, path_exists=excluded.path_exists, time_window_start=excluded.time_window_start, time_window_end=excluded.time_window_end, updated_at=excluded.updated_at",
+        "INSERT INTO orden_jobs (name, config_name, enabled, mode, cron_expr, fixed_time, interval_minutes, watch_paths, tags, skip_tags, simulate, require_confirmation, min_file_count, path_exists, time_window_start, time_window_end, last_run_at, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?18)
+         ON CONFLICT(name) DO UPDATE SET config_name=excluded.config_name, enabled=excluded.enabled, mode=excluded.mode, cron_expr=excluded.cron_expr, fixed_time=excluded.fixed_time, interval_minutes=excluded.interval_minutes, watch_paths=excluded.watch_paths, tags=excluded.tags, skip_tags=excluded.skip_tags, simulate=excluded.simulate, require_confirmation=excluded.require_confirmation, min_file_count=excluded.min_file_count, path_exists=excluded.path_exists, time_window_start=excluded.time_window_start, time_window_end=excluded.time_window_end, updated_at=excluded.updated_at",
         params![
             job.name,
             job.config_name,
@@ -220,6 +240,7 @@ pub fn upsert_orden_job(job: &OrdenJob) -> SqliteResult<i64> {
             job.tags,
             job.skip_tags,
             job.simulate as i32,
+            job.require_confirmation as i32,
             job.min_file_count,
             job.path_exists,
             job.time_window_start,
@@ -247,6 +268,32 @@ pub fn mark_orden_job_run(id: i64) -> SqliteResult<()> {
     let conn = db.lock().unwrap();
     conn.execute(
         "UPDATE orden_jobs SET last_run_at=?1, updated_at=?1 WHERE id=?2",
+        params![Utc::now().to_rfc3339(), id],
+    )?;
+    Ok(())
+}
+
+pub fn update_orden_job_pending(
+    id: i64,
+    success: i64,
+    errors: i64,
+    logs_json: &str,
+) -> SqliteResult<()> {
+    let db = get_db();
+    let conn = db.lock().unwrap();
+    let now = Utc::now().to_rfc3339();
+    conn.execute(
+        "UPDATE orden_jobs SET pending_success=?1, pending_errors=?2, pending_logs_json=?3, pending_scanned_at=?4, updated_at=?4 WHERE id=?5",
+        params![success, errors, logs_json, now, id],
+    )?;
+    Ok(())
+}
+
+pub fn clear_orden_job_pending(id: i64) -> SqliteResult<()> {
+    let db = get_db();
+    let conn = db.lock().unwrap();
+    conn.execute(
+        "UPDATE orden_jobs SET pending_success=0, pending_errors=0, pending_logs_json='[]', pending_scanned_at=NULL, updated_at=?1 WHERE id=?2",
         params![Utc::now().to_rfc3339(), id],
     )?;
     Ok(())

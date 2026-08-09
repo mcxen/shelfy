@@ -69,6 +69,20 @@ Write-capable tools are disabled by default and require the separate MCP write p
 
 Orden schedules are separate automation jobs, not fields inside the rule YAML. For a true one-hour interval, call `shelfy_save_orden_job` with `mode: "interval"` and `interval_minutes: 60`. The cron expression `0 * * * *` instead runs on each wall-clock hour.
 
+## Install on macOS
+
+Shelfy ships as a Universal macOS application for Apple Silicon and Intel. Install and update it with Homebrew:
+
+```bash
+brew tap mcxen/shelfy https://github.com/mcxen/shelfy.git
+brew install --cask mcxen/shelfy/shelfy
+brew upgrade --cask --greedy-latest mcxen/shelfy/shelfy
+```
+
+Shelfy can also check for a release and install a verified update from Settings → General. Automatic installation is opt-in; an install location that cannot be replaced by the current user falls back to Homebrew or manual installation without requesting elevated privileges.
+
+Current macOS builds are ad-hoc signed rather than Developer ID signed or notarized. If Gatekeeper blocks the first launch, review the warning in System Settings → Privacy & Security and choose Open Anyway.
+
 ## CLI
 
 On macOS, the installed app creates `~/.local/bin/shelfy` on its first launch and adds that directory to zsh/bash login and interactive profiles. Open a new terminal, then use the short CLI form below. The explicit `--cli` form remains supported when calling the app executable directly.

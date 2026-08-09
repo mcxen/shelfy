@@ -10,7 +10,7 @@ import { TagInput } from "../ui/tag-input";
 type Value = string | boolean | number | string[];
 type Values = Record<string, Value>;
 type FieldType = "text" | "textarea" | "password" | "boolean" | "select" | "tags" | "number";
-type Field = { key: string; type: FieldType; options?: string[]; placeholder?: string; wide?: boolean };
+type Field = { key: string; type: FieldType; options?: string[]; placeholder?: string; wide?: boolean; min?: number; max?: number; defaultValue?: Value; showWhen?: { key: string; value: Value } };
 
 const ACTION_FIELDS: Record<string, Field[]> = {
   move: destinationFields(), copy: destinationFields(true), symlink: destinationFields(), hardlink: destinationFields(),
@@ -60,7 +60,12 @@ function archiveFields(extract: boolean): Field[] {
   return [
     { key: "dest", type: "text", wide: true }, { key: "format", type: "select", options: extract ? ["auto", "zip", "7z", "rar"] : ["zip", "7z", "rar"] },
     { key: extract ? "passwords" : "password", type: extract ? "tags" : "password", wide: true },
-    { key: "delete_original", type: "boolean" }, ...conflictFields(),
+    { key: "delete_original", type: "boolean" },
+    ...(extract ? [
+      { key: "recursive", type: "boolean" } as Field,
+      { key: "max_depth", type: "number", min: 1, max: 10, defaultValue: 3, showWhen: { key: "recursive", value: true } } as Field,
+    ] : []),
+    ...conflictFields(),
   ];
 }
 
@@ -133,6 +138,7 @@ export function OrdenStepParameterEditor({ mode, kind, value, onChange, label }:
 
   return <div className="grid gap-3 md:grid-cols-2">
     {fields.map((field) => {
+      if (field.showWhen && values[field.showWhen.key] !== field.showWhen.value) return null;
       const id = `orden-step-${kind}-${field.key}`;
       const current = values[field.key];
       if (field.type === "boolean") return <Label key={field.key} className="flex min-h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-xs"><Checkbox checked={current === true} onCheckedChange={(checked) => set(field.key, checked === true)} />{label(field.key)}</Label>;
@@ -141,7 +147,7 @@ export function OrdenStepParameterEditor({ mode, kind, value, onChange, label }:
         {field.type === "select" ? <Select value={String(current ?? field.options?.[0] ?? "")} onValueChange={(next) => set(field.key, next)}><SelectTrigger id={id}><SelectValue /></SelectTrigger><SelectContent>{field.options?.map((option) => <SelectItem key={option} value={option}>{label(option)}</SelectItem>)}</SelectContent></Select>
           : field.type === "tags" ? <TagInput value={Array.isArray(current) ? current : current ? [String(current)] : []} onChange={(next) => set(field.key, next)} placeholder={field.placeholder} ariaLabel={label(field.key)} maskValues={field.key === "passwords"} />
           : field.type === "textarea" ? <textarea id={id} value={String(current ?? "")} onChange={(event) => set(field.key, event.target.value)} placeholder={field.placeholder} className="min-h-20 w-full resize-y rounded-md border border-input bg-card px-2.5 py-2 text-xs leading-5 outline-none focus:border-ring focus:ring-2 focus:ring-ring/20" />
-          : <div className="relative"><Input id={id} type={field.type === "number" ? "number" : field.type === "password" && !showPassword ? "password" : "text"} value={String(current ?? "")} onChange={(event) => set(field.key, field.type === "number" ? Number(event.target.value) : event.target.value)} placeholder={field.placeholder} className={field.type === "password" ? "pr-9" : undefined} />{field.type === "password" && <Button type="button" variant="ghost" size="icon-sm" onClick={() => setShowPassword((shown) => !shown)} className="absolute right-1 top-1/2 -translate-y-1/2" aria-label={showPassword ? label("hide_password") : label("show_password")}>{showPassword ? <EyeOff /> : <Eye />}</Button>}</div>}
+          : <div className="relative"><Input id={id} type={field.type === "number" ? "number" : field.type === "password" && !showPassword ? "password" : "text"} min={field.min} max={field.max} value={String(current ?? field.defaultValue ?? "")} onChange={(event) => set(field.key, field.type === "number" ? Number(event.target.value) : event.target.value)} placeholder={field.placeholder} className={field.type === "password" ? "pr-9" : undefined} />{field.type === "password" && <Button type="button" variant="ghost" size="icon-sm" onClick={() => setShowPassword((shown) => !shown)} className="absolute right-1 top-1/2 -translate-y-1/2" aria-label={showPassword ? label("hide_password") : label("show_password")}>{showPassword ? <EyeOff /> : <Eye />}</Button>}</div>}
       </div>;
     })}
   </div>;

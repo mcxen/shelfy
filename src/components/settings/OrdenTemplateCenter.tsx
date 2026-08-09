@@ -421,30 +421,53 @@ export function OrdenTemplateCenter({
         <aside className="order-1 xl:order-2 xl:sticky xl:top-0">
           {selectedTemplate && selectedTone && selectedSummary ? (
             <Card className={cn("overflow-hidden", selectedTone.border)}>
-              <div className={cn("h-1.5", selectedTone.bar)} />
-              <div className="p-3">
-                <div className="flex items-start gap-3">
-                  <div className={cn("flex size-10 shrink-0 items-center justify-center rounded-lg", selectedTone.icon)}>{renderIcon(selectedTemplate, "size-5")}</div>
-                  <div className="min-w-0"><div className="flex flex-wrap items-center gap-1.5"><Badge variant="outline">{templateCategory(selectedTemplate, t)}</Badge><Badge variant={selectedSummary.safety === "destructive" ? "destructive" : "secondary"}>{safetyLabel(selectedSummary.safety)}</Badge>{selectedSummary.deletesOriginal && <Badge variant="destructive">{t("settings.orden.templates.deletesOriginal")}</Badge>}</div><h3 className="mt-2 text-base font-semibold">{templateLabel(selectedTemplate, t)}</h3><p className="mt-1 text-xs text-muted-foreground">{templateDescription(selectedTemplate, t)}</p></div>
+              <div className={cn("h-1", selectedTone.bar)} />
+              <div className="p-2.5 xl:p-3">
+                <div className="grid gap-2.5 min-[760px]:grid-cols-[minmax(15rem,0.85fr)_minmax(0,1.65fr)] xl:block">
+                  <div className="flex min-w-0 items-start gap-2.5">
+                    <div className={cn("flex size-9 shrink-0 items-center justify-center rounded-lg", selectedTone.icon)}>{renderIcon(selectedTemplate, "size-4")}</div>
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-1"><Badge variant="outline">{templateCategory(selectedTemplate, t)}</Badge><Badge variant={selectedSummary.safety === "destructive" ? "destructive" : "secondary"}>{safetyLabel(selectedSummary.safety)}</Badge>{selectedSummary.deletesOriginal && <Badge variant="destructive">{t("settings.orden.templates.deletesOriginal")}</Badge>}</div>
+                      <h3 className="mt-1.5 text-sm font-semibold">{templateLabel(selectedTemplate, t)}</h3>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{templateDescription(selectedTemplate, t)}</p>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-1.5 min-[520px]:grid-cols-3 xl:mt-3 xl:grid-cols-1">
+                    <div className="rounded-lg border border-border bg-background p-2">
+                      <div className="flex min-w-0 items-center gap-2 xl:block">
+                        <div className="flex shrink-0 items-center gap-1.5 text-xs font-semibold"><FileInput className="size-3.5 text-primary" />{t("settings.orden.workflow.source", { defaultValue: "Source" })}</div>
+                        <div className="min-w-0 truncate font-mono text-[10px] text-muted-foreground xl:mt-1" title={selectedSummary.sources.join("\n")}>{compactList(selectedSummary.sources, "—")}</div>
+                      </div>
+                    </div>
+                    <div className="ml-5 hidden h-1.5 border-l border-dashed border-border xl:block" />
+                    <div className="rounded-lg border border-border bg-background p-2">
+                      <div className="flex min-w-0 items-center gap-2 xl:block">
+                        <div className="flex shrink-0 items-center gap-1.5 text-xs font-semibold"><Filter className="size-3.5 text-primary" />{t("settings.orden.workflow.conditions", { defaultValue: "Conditions" })}</div>
+                        <div className="min-w-0 truncate text-[10px] text-muted-foreground xl:mt-1">{compactList(selectedSummary.filters, t("settings.orden.workflow.matchEverything", { defaultValue: "Match everything" }))}</div>
+                      </div>
+                    </div>
+                    <div className="ml-5 hidden h-1.5 border-l border-dashed border-border xl:block" />
+                    <div className="rounded-lg border border-border bg-background p-2">
+                      <div className="flex min-w-0 items-center gap-2 xl:block">
+                        <div className="flex shrink-0 items-center gap-1.5 text-xs font-semibold"><WandSparkles className="size-3.5 text-primary" />{t("settings.orden.workflow.actions", { defaultValue: "Actions" })}</div>
+                        <div className="min-w-0 truncate text-[10px] text-muted-foreground xl:mt-1">{compactList(selectedSummary.actions, "—")}</div>
+                      </div>
+                    </div>
+                    {selectedTemplate.automation && <><div className="ml-5 hidden h-1.5 border-l border-dashed border-border xl:block" /><div className="rounded-lg border border-primary/25 bg-primary/8 p-2 min-[520px]:col-span-3 xl:col-auto"><div className="flex min-w-0 items-center gap-2 xl:block"><div className="flex shrink-0 items-center gap-1.5 text-xs font-semibold"><Clock3 className="size-3.5 text-primary" />{t("settings.orden.templates.scheduleTitle")}</div><div className="min-w-0 truncate text-[10px] text-muted-foreground xl:mt-1">{t("settings.orden.templates.scheduleThreeTimes")} · <span className="font-mono">{selectedTemplate.automation.cron_expr}</span></div></div></div></>}
+                  </div>
                 </div>
 
-                <div className="mt-3 space-y-1.5">
-                  <div className="rounded-lg border border-border bg-background p-2.5"><div className="flex items-center gap-2 text-xs font-semibold"><FileInput className="size-3.5 text-primary" />{t("settings.orden.workflow.source", { defaultValue: "Source" })}</div><div className="mt-1 truncate font-mono text-[10px] text-muted-foreground" title={selectedSummary.sources.join("\n")}>{compactList(selectedSummary.sources, "—")}</div></div>
-                  <div className="ml-5 h-2 border-l border-dashed border-border" />
-                  <div className="rounded-lg border border-border bg-background p-2.5"><div className="flex items-center gap-2 text-xs font-semibold"><Filter className="size-3.5 text-primary" />{t("settings.orden.workflow.conditions", { defaultValue: "Conditions" })}</div><div className="mt-1 text-[10px] text-muted-foreground">{compactList(selectedSummary.filters, t("settings.orden.workflow.matchEverything", { defaultValue: "Match everything" }))}</div></div>
-                  <div className="ml-5 h-2 border-l border-dashed border-border" />
-                  <div className="rounded-lg border border-border bg-background p-2.5"><div className="flex items-center gap-2 text-xs font-semibold"><WandSparkles className="size-3.5 text-primary" />{t("settings.orden.workflow.actions", { defaultValue: "Actions" })}</div><div className="mt-1 text-[10px] text-muted-foreground">{compactList(selectedSummary.actions, "—")}</div></div>
-                  {selectedTemplate.automation && <><div className="ml-5 h-2 border-l border-dashed border-border" /><div className="rounded-lg border border-primary/25 bg-primary/8 p-2.5"><div className="flex items-center gap-2 text-xs font-semibold"><Clock3 className="size-3.5 text-primary" />{t("settings.orden.templates.scheduleTitle")}</div><div className="mt-1 text-[10px] text-muted-foreground">{t("settings.orden.templates.scheduleThreeTimes")} · <span className="font-mono">{selectedTemplate.automation.cron_expr}</span></div></div></>}
+                <div className="mt-2 flex flex-col gap-2 min-[760px]:flex-row xl:flex-col">
+                  <div className="flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-primary/20 bg-primary/8 px-2.5 py-2 text-xs text-muted-foreground">
+                    {selectedSummary.safety === "keeps" ? <ShieldCheck className="size-3.5 shrink-0 text-primary" /> : <Braces className="size-3.5 shrink-0 text-primary" />}
+                    <span>{t("settings.orden.templates.summary", { defaultValue: "{{rules}} rule(s), {{sources}} source(s), {{steps}} total steps.", rules: selectedSummary.ruleCount, sources: selectedSummary.sources.length, steps: selectedSummary.filters.length + selectedSummary.actions.length })}</span>
+                  </div>
+
+                  <Button type="button" className="w-full min-[760px]:w-auto xl:w-full" onClick={() => void handleUse(selectedTemplate)} disabled={busyId === selectedTemplate.id}><Plus />{t(selectedTemplate.automation ? "settings.orden.templates.useWithSchedule" : "settings.orden.templates.useAndCustomize", { defaultValue: "Use and customize" })}</Button>
                 </div>
 
-                <div className="mt-3 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary/8 p-2.5 text-xs text-muted-foreground">
-                  {selectedSummary.safety === "keeps" ? <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-primary" /> : <Braces className="mt-0.5 size-3.5 shrink-0 text-primary" />}
-                  <span>{t("settings.orden.templates.summary", { defaultValue: "{{rules}} rule(s), {{sources}} source(s), {{steps}} total steps.", rules: selectedSummary.ruleCount, sources: selectedSummary.sources.length, steps: selectedSummary.filters.length + selectedSummary.actions.length })}</span>
-                </div>
-
-                <Button type="button" className="mt-3 w-full" onClick={() => void handleUse(selectedTemplate)} disabled={busyId === selectedTemplate.id}><Plus />{t(selectedTemplate.automation ? "settings.orden.templates.useWithSchedule" : "settings.orden.templates.useAndCustomize", { defaultValue: "Use and customize" })}</Button>
-
-                <details className="mt-3 rounded-lg border border-border bg-muted/15">
+                <details className="mt-2 rounded-lg border border-border bg-muted/15">
                   <summary className="cursor-pointer select-none px-3 py-2 text-xs font-medium text-muted-foreground">{t("settings.orden.templates.advanced", { defaultValue: "Advanced template options" })}</summary>
                   <div className="space-y-2.5 border-t border-border p-3">
                     {selectedTemplate.is_system && <div><Label htmlFor="orden-template-name" className="mb-1 block text-xs">{t("settings.orden.templates.customNameLabel")}</Label><Input id="orden-template-name" value={draftName} onChange={(event) => setDraftName(event.target.value)} placeholder={t("settings.orden.templates.customName")} /></div>}

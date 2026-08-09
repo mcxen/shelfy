@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { ReactNode, useId, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Activity, BookOpen, Bot, Copy, Download, FileCheck2, RefreshCw, Rocket, Save, ServerCog, SlidersHorizontal, Upload, X } from "lucide-react";
 import { AppSettings, McpClientConfig, ScheduleSettings, SchedulerLog, UpdateInfo } from "../../store/useAppStore";
+import { cn } from "../../lib/utils";
 import { AnimatedIcon } from "../ui/animated-icon";
 import { Button } from "../ui/button";
 import { Card } from "../ui/card";
@@ -15,6 +16,34 @@ import { Switch } from "../ui/switch";
 
 type GraceUnit = "seconds" | "minutes" | "hours";
 type Toast = { message: string; type: "success" | "error" } | null;
+
+function SettingRow({ id, label, description, children, className }: { id?: string; label: ReactNode; description?: ReactNode; children: ReactNode; className?: string }) {
+  return (
+    <div className={cn("grid min-h-12 gap-2 px-3 py-2 min-[900px]:grid-cols-[minmax(14rem,1fr)_minmax(28rem,1.7fr)] min-[900px]:items-center", className)}>
+      <div className="min-w-0">
+        <Label htmlFor={id} className="text-sm font-medium">{label}</Label>
+        {description && <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>}
+      </div>
+      <div className="flex min-w-0 flex-wrap items-center justify-end gap-2">{children}</div>
+    </div>
+  );
+}
+
+function SettingGroup({ children }: { children: ReactNode }) {
+  return <div className="divide-y divide-border/60 overflow-hidden rounded-lg border border-border/70 bg-muted/10">{children}</div>;
+}
+
+function SectionHeading({ icon, title, description, actions }: { icon?: ReactNode; title: ReactNode; description: ReactNode; actions?: ReactNode }) {
+  return (
+    <div className="flex min-h-9 items-center justify-between gap-3">
+      <div className="min-w-0">
+        <h3 className="flex items-center gap-2 text-sm font-semibold">{icon}{title}</h3>
+        <p className="text-xs text-muted-foreground">{description}</p>
+      </div>
+      {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
+    </div>
+  );
+}
 type McpDraft = Pick<
   AppSettings,
   | "mcp_enabled"
@@ -65,7 +94,7 @@ interface GeneralTabProps {
   setReplaceConfigOnImport: (replace: boolean) => void;
   configToast: Toast;
   checkUpdate: () => Promise<UpdateInfo>;
-  installUpdate: (info: UpdateInfo) => Promise<void>;
+  installUpdate: () => Promise<void>;
 }
 
 export function GeneralTab({
@@ -109,8 +138,15 @@ export function GeneralTab({
   installUpdate,
 }: GeneralTabProps) {
   const { t, i18n } = useTranslation();
+  const autoUpdateId = useId();
+  const autostartId = useId();
+  const fileLockId = useId();
+  const scheduleEnabledId = useId();
+  const cronEnabledId = useId();
+  const keepaliveEnabledId = useId();
+  const mcpEnabledId = useId();
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null);
-  const [updateBusy, setUpdateBusy] = useState(false);
+  const [updateActivity, setUpdateActivity] = useState<"idle" | "checking" | "installing">("idle");
   const [updateError, setUpdateError] = useState<string | null>(null);
   const [mcpHelpOpen, setMcpHelpOpen] = useState(false);
   const [mcpHelp, setMcpHelp] = useState("");
@@ -130,282 +166,147 @@ export function GeneralTab({
   };
 
   const handleCheckUpdate = async () => {
-    setUpdateBusy(true);
+    setUpdateActivity("checking");
     setUpdateError(null);
     try {
       setUpdateInfo(await checkUpdate());
     } catch (error) {
       setUpdateError(String(error));
     } finally {
-      setUpdateBusy(false);
+      setUpdateActivity("idle");
     }
   };
 
   const handleInstallUpdate = async () => {
     if (!updateInfo) return;
-    setUpdateBusy(true);
+    setUpdateActivity("installing");
     setUpdateError(null);
     try {
-      await installUpdate(updateInfo);
+      await installUpdate();
     } catch (error) {
       setUpdateError(String(error));
-      setUpdateBusy(false);
+      setUpdateActivity("idle");
     }
   };
 
   return (
     <div className="flex w-full flex-col gap-3">
-      <Card className="space-y-4 p-3">
-        <h2 className="text-lg font-semibold">{t("settings.general.title")}</h2>
+      <Card className="space-y-3 p-3">
+        <h2 className="text-base font-semibold">{t("settings.general.title")}</h2>
 
         <section className="space-y-2">
-          <div>
-            <h3 className="text-sm font-semibold">{t("settings.general.preferences", { defaultValue: "Preferences" })}</h3>
-            <p className="text-xs text-muted-foreground">{t("settings.general.preferencesDesc", { defaultValue: "Language, appearance, and startup behavior." })}</p>
-          </div>
-          <div className="grid gap-2 md:grid-cols-3">
-        <div className="min-w-0">
-          <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.general.language")}</Label>
-          <Select value={settings?.language || "en"} onValueChange={handleChangeLanguage}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="en">English</SelectItem>
-              <SelectItem value="pl">Polski</SelectItem>
-              <SelectItem value="it">Italiano</SelectItem>
-              <SelectItem value="de">Deutsch</SelectItem>
-              <SelectItem value="fr">Français</SelectItem>
-              <SelectItem value="ru">Русский</SelectItem>
-              <SelectItem value="ja">日本語</SelectItem>
-              <SelectItem value="zh">中文</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="min-w-0">
-          <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.general.theme")}</Label>
-          <Select value={settings?.theme || "system"} onValueChange={(value) => settings && saveSettings({ ...settings, theme: value })}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="system">{t("settings.general.themeSystem")}</SelectItem>
-              <SelectItem value="light">{t("settings.general.themeLight")}</SelectItem>
-              <SelectItem value="dark">{t("settings.general.themeDark")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex min-h-9 items-center justify-between rounded-lg border border-border/60 bg-muted/20 px-3">
-          <Label className="text-sm">{t("settings.general.startWithSystem")}</Label>
-          <Switch checked={settings?.autostart || false} onCheckedChange={(checked) => setAutostart(checked)} />
-        </div>
+          <SectionHeading
+            title={t("settings.general.preferences", { defaultValue: "Preferences" })}
+            description={t("settings.general.preferencesDesc", { defaultValue: "Language, appearance, and startup behavior." })}
+          />
+          <div className="grid gap-px overflow-hidden rounded-lg border border-border/70 bg-border/60 min-[900px]:grid-cols-3">
+            <div className="flex min-h-12 items-center justify-between gap-3 bg-card px-3 py-2">
+              <Label className="shrink-0 text-sm font-medium">{t("settings.general.language")}</Label>
+              <Select value={settings?.language || "en"} onValueChange={handleChangeLanguage}>
+                <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="en">English</SelectItem><SelectItem value="pl">Polski</SelectItem><SelectItem value="it">Italiano</SelectItem><SelectItem value="de">Deutsch</SelectItem><SelectItem value="fr">Français</SelectItem><SelectItem value="ru">Русский</SelectItem><SelectItem value="ja">日本語</SelectItem><SelectItem value="zh">中文</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex min-h-12 items-center justify-between gap-3 bg-card px-3 py-2">
+              <Label className="shrink-0 text-sm font-medium">{t("settings.general.theme")}</Label>
+              <Select value={settings?.theme || "system"} onValueChange={(value) => settings && saveSettings({ ...settings, theme: value })}>
+                <SelectTrigger className="h-8 w-36"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="system">{t("settings.general.themeSystem")}</SelectItem><SelectItem value="light">{t("settings.general.themeLight")}</SelectItem><SelectItem value="dark">{t("settings.general.themeDark")}</SelectItem></SelectContent>
+              </Select>
+            </div>
+            <div className="flex min-h-12 items-center justify-between gap-3 bg-card px-3 py-2">
+              <Label htmlFor={autostartId} className="text-sm font-medium">{t("settings.general.startWithSystem")}</Label>
+              <Switch id={autostartId} checked={settings?.autostart || false} onCheckedChange={setAutostart} />
+            </div>
           </div>
         </section>
 
         <section className="space-y-2 border-t border-border/70 pt-3">
-          <div>
-            <h3 className="text-sm font-semibold">{t("settings.general.fileHandling", { defaultValue: "File handling" })}</h3>
-            <p className="text-xs text-muted-foreground">{t("settings.general.fileHandlingDesc", { defaultValue: "Control when files are processed and how busy files are handled." })}</p>
-          </div>
-          <div className="grid gap-2 lg:grid-cols-[minmax(0,1.35fr)_minmax(18rem,.65fr)]">
-        <div className="space-y-2 rounded-lg border border-border/60 bg-muted/15 p-2.5">
-          <div className="flex items-center justify-between">
-            <Label className="text-sm font-medium">{t("settings.general.gracePeriod")}</Label>
-            <span className="text-xs text-muted-foreground">{formatDuration(currentGraceSeconds)}</span>
-          </div>
-          <Slider min={0} max={graceSteps.length - 1} step={1} value={[sliderIndex]} onValueChange={([value]) => handleGraceSliderChange(value)} />
-          <div className="grid grid-cols-[minmax(0,1fr)_7.5rem] gap-2">
-            <Input
-              type="number"
-              min={0}
-              value={graceValue}
-              onChange={(e) => handleGraceNumberChange(parseInt(e.target.value, 10) || 0, graceUnit)}
-              className="w-full tabular-nums"
-            />
-            <Select value={graceUnit} onValueChange={(value) => handleGraceNumberChange(graceValue, value as GraceUnit)}>
-              <SelectTrigger className="w-full">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="seconds">{t("settings.general.gracePeriodSeconds")}</SelectItem>
-                <SelectItem value="minutes">{t("settings.general.gracePeriodMinutes")}</SelectItem>
-                <SelectItem value="hours">{t("settings.general.gracePeriodHours")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          {graceError && <p className="text-xs text-destructive">{graceError}</p>}
-          <p className="text-xs text-muted-foreground">{t("settings.general.gracePeriodDesc")}</p>
-        </div>
-
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-border/60 bg-muted/15 p-2.5">
-          <div>
-            <Label className="text-sm font-medium">{t("settings.general.checkFileLock")}</Label>
-            <p className="text-xs text-muted-foreground">{t("settings.general.checkFileLockDesc")}</p>
-          </div>
-          <Switch
-            checked={settings?.lock_check_enabled || false}
-            onCheckedChange={(checked) => {
-              if (!settings) return;
-              saveSettings({ ...settings, lock_check_enabled: checked });
-            }}
+          <SectionHeading
+            title={t("settings.general.fileHandling", { defaultValue: "File handling" })}
+            description={t("settings.general.fileHandlingDesc", { defaultValue: "Control when files are processed and how busy files are handled." })}
           />
-        </div>
-          </div>
+          <SettingGroup>
+            <SettingRow label={t("settings.general.gracePeriod")} description={graceError || t("settings.general.gracePeriodDesc")}>
+              <Slider className="min-w-36 flex-1" min={0} max={graceSteps.length - 1} step={1} value={[sliderIndex]} onValueChange={([value]) => handleGraceSliderChange(value)} />
+              <span className={cn("w-10 text-right text-xs tabular-nums", graceError ? "text-destructive" : "text-muted-foreground")}>{formatDuration(currentGraceSeconds)}</span>
+              <Input type="number" min={0} value={graceValue} onChange={(e) => handleGraceNumberChange(parseInt(e.target.value, 10) || 0, graceUnit)} className="h-8 w-20 tabular-nums" />
+              <Select value={graceUnit} onValueChange={(value) => handleGraceNumberChange(graceValue, value as GraceUnit)}>
+                <SelectTrigger className="h-8 w-28"><SelectValue /></SelectTrigger>
+                <SelectContent><SelectItem value="seconds">{t("settings.general.gracePeriodSeconds")}</SelectItem><SelectItem value="minutes">{t("settings.general.gracePeriodMinutes")}</SelectItem><SelectItem value="hours">{t("settings.general.gracePeriodHours")}</SelectItem></SelectContent>
+              </Select>
+            </SettingRow>
+            <SettingRow id={fileLockId} label={t("settings.general.checkFileLock")} description={t("settings.general.checkFileLockDesc")}>
+              <Switch id={fileLockId} checked={settings?.lock_check_enabled || false} onCheckedChange={(checked) => settings && saveSettings({ ...settings, lock_check_enabled: checked })} />
+            </SettingRow>
+          </SettingGroup>
         </section>
       </Card>
 
-      <Card className="order-5 space-y-3 p-3">
-        <div className="flex items-start justify-between gap-3">
-          <div>
-            <h3 className="flex items-center gap-2 text-base font-semibold">
-              <Rocket size={16} className="text-primary" />
-              {t("settings.general.updates", { defaultValue: "Application updates" })}
-            </h3>
-            <p className="text-xs text-muted-foreground">{t("settings.general.updatesDesc", { defaultValue: "Check for new releases and install compatible updates." })}</p>
-          </div>
-          <Button onClick={handleCheckUpdate} variant="outline" size="sm" disabled={updateBusy}>
-            <RefreshCw size={14} className={updateBusy ? "animate-spin" : ""} />
-            {updateBusy ? t("settings.general.checkingUpdates", { defaultValue: "Checking…" }) : t("settings.general.checkUpdates", { defaultValue: "Check for updates" })}
-          </Button>
-        </div>
-        <div className="grid gap-2 text-xs sm:grid-cols-2">
-          <div className="rounded-lg border border-border/60 bg-muted/25 px-3 py-2">
-            <span className="text-muted-foreground">{t("settings.general.currentVersion", { defaultValue: "Current version" })}</span>
-            <div className="mt-0.5 font-medium">{updateInfo?.current_version || "0.2.2"}</div>
-          </div>
-          <div className="rounded-lg border border-border/60 bg-muted/25 px-3 py-2">
-            <span className="text-muted-foreground">{t("settings.general.latestRelease", { defaultValue: "Latest release" })}</span>
-            <div className="mt-0.5 font-medium">{updateInfo?.latest_version || t("settings.general.notChecked", { defaultValue: "Not checked" })}</div>
-          </div>
-        </div>
-        {updateInfo && (
-          <div className="space-y-2 rounded-xl border border-border bg-card p-3 text-sm">
-            <div className="flex items-center justify-between gap-2">
-              <div>
-                <div className="font-medium">{updateInfo.release_name}</div>
-                <div className="text-xs text-muted-foreground">{updateInfo.available ? `Compatible asset: ${updateInfo.asset_name || "not found"}` : "Shelfy is up to date."}</div>
-              </div>
-              {updateInfo.available && updateInfo.asset_url && (
-                <Button onClick={handleInstallUpdate} disabled={updateBusy}>
-                  <Download size={14} />
-                  {t("settings.general.installUpdate", { defaultValue: "Download, install & restart" })}
-                </Button>
-              )}
-            </div>
-            {updateInfo.release_notes && <p className="max-h-24 overflow-auto whitespace-pre-wrap text-xs text-muted-foreground">{updateInfo.release_notes}</p>}
-          </div>
-        )}
+      <Card className="order-5 space-y-2 p-3">
+        <SectionHeading
+          icon={<Rocket size={15} className="text-primary" />}
+          title={t("settings.general.updates", { defaultValue: "Application updates" })}
+          description={t("settings.general.updatesDesc", { defaultValue: "Check for new releases and install compatible updates." })}
+          actions={<Button type="button" onClick={handleCheckUpdate} variant="outline" size="sm" disabled={updateActivity !== "idle"}><RefreshCw className={updateActivity === "checking" ? "animate-spin" : ""} />{updateActivity === "checking" ? t("settings.general.checkingUpdates", { defaultValue: "Checking…" }) : t("settings.general.checkUpdates", { defaultValue: "Check for updates" })}</Button>}
+        />
+        <SettingGroup>
+          <SettingRow id={autoUpdateId} label={t("settings.general.autoUpdate", { defaultValue: "Install updates automatically" })} description={t("settings.general.autoUpdateDesc", { defaultValue: "Check in the background and restart Shelfy after a verified update is ready." })}>
+            <Switch id={autoUpdateId} checked={settings?.auto_update || false} onCheckedChange={(checked) => settings && saveSettings({ ...settings, auto_update: checked })} />
+          </SettingRow>
+          <SettingRow label={updateInfo?.release_name || t("settings.general.latestRelease", { defaultValue: "Latest release" })} description={updateInfo ? (!updateInfo.available ? t("settings.general.upToDate", { defaultValue: "Shelfy is up to date." }) : updateInfo.can_install ? t("settings.general.updateReady", { defaultValue: "Verified update package is ready to download." }) : t("settings.general.manualUpdateRequired", { defaultValue: "This release must be installed manually." })) : t("settings.general.notChecked", { defaultValue: "Not checked" })}>
+            <span className="text-xs text-muted-foreground">{t("settings.general.currentVersion", { defaultValue: "Current version" })}</span>
+            <span className="min-w-14 text-sm font-medium tabular-nums">{updateInfo?.current_version || "—"}</span>
+            <span className="text-xs text-muted-foreground">{t("settings.general.latestRelease", { defaultValue: "Latest release" })}</span>
+            <span className="min-w-14 text-sm font-medium tabular-nums">{updateInfo?.latest_version || "—"}</span>
+            {updateInfo?.available && updateInfo.can_install && <Button type="button" onClick={handleInstallUpdate} size="sm" disabled={updateActivity !== "idle"}><Download />{updateActivity === "installing" ? t("settings.general.preparingUpdate", { defaultValue: "Downloading and preparing…" }) : t("settings.general.installUpdate", { defaultValue: "Download, install & restart" })}</Button>}
+          </SettingRow>
+        </SettingGroup>
+        {updateInfo?.release_notes && <p className="max-h-20 overflow-auto whitespace-pre-wrap px-1 text-xs text-muted-foreground">{updateInfo.release_notes}</p>}
         {updateError && <div className="rounded-lg border border-destructive/20 bg-destructive/10 px-3 py-2 text-xs text-destructive">{updateError}</div>}
       </Card>
 
-      <Card className="order-2 space-y-2.5 p-3">
-        <div className="flex items-center justify-between gap-3">
-          <div>
-          <h3 className="flex items-center gap-2 text-base font-semibold">
-            <SlidersHorizontal size={16} className="text-primary" />
-            {t("settings.scheduler.title")}
-          </h3>
-          <p className="text-xs text-muted-foreground">{t("settings.scheduler.desc")}</p>
-          </div>
-          <Label className="flex shrink-0 items-center gap-2 text-sm text-muted-foreground">
-          <span>{t("settings.scheduler.enable")}</span>
-          <Switch checked={localSchedule.schedule_enabled} onCheckedChange={(checked) => handleScheduleChange({ schedule_enabled: checked })} />
-          </Label>
-        </div>
+      <Card className="order-2 space-y-2 p-3">
+        <SectionHeading
+          icon={<SlidersHorizontal size={15} className="text-primary" />}
+          title={t("settings.scheduler.title")}
+          description={t("settings.scheduler.desc")}
+          actions={<Button type="button" onClick={handleSaveSchedule} size="sm"><AnimatedIcon icon={Save} motion="pulse" />{t("settings.scheduler.save")}</Button>}
+        />
 
-        <div className="grid gap-3 rounded-lg border border-border/70 bg-muted/10 p-2.5 lg:grid-cols-[12rem_minmax(0,1fr)] lg:items-end">
-        <div>
-          <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.scheduler.timesPerDay")}</Label>
-          <Select value={String(localSchedule.schedule_times_per_day)} onValueChange={(value) => handleScheduleChange({ schedule_times_per_day: parseInt(value, 10) })}>
-            <SelectTrigger className="w-full">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="1">{t("settings.scheduler.once")}</SelectItem>
-              <SelectItem value="2">{t("settings.scheduler.twice")}</SelectItem>
-              <SelectItem value="3">{t("settings.scheduler.thrice")}</SelectItem>
-              <SelectItem value="4">{t("settings.scheduler.fourTimes")}</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: localSchedule.schedule_times_per_day }).map((_, idx) => {
-            const key = `schedule_time_${idx + 1}` as keyof ScheduleSettings;
-            return (
-              <div key={idx}>
-                <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.scheduler.time", { number: idx + 1 })}</Label>
-                <Input
-                  type="time"
-                  value={(localSchedule[key] as string | null) || ""}
-                  onChange={(e) => handleScheduleChange({ [key]: e.target.value || null } as Partial<ScheduleSettings>)}
-                />
-              </div>
-            );
-          })}
-        </div>
-        </div>
-
-        <div className="grid gap-3 xl:grid-cols-2">
-        <section className="space-y-2.5 rounded-lg border border-border/70 bg-muted/15 p-2.5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <Label className="text-sm text-muted-foreground">{t("settings.scheduler.cronEnable")}</Label>
-              <p className="text-xs text-muted-foreground">{t("settings.scheduler.cronDesc")}</p>
-            </div>
-            <Switch checked={localSchedule.schedule_cron_enabled} onCheckedChange={(checked) => handleScheduleChange({ schedule_cron_enabled: checked })} />
-          </div>
-          <div className="grid gap-2 md:grid-cols-[minmax(0,1fr)_auto] md:items-end">
-            <div className="flex-1">
-              <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.scheduler.cronExpression")}</Label>
-              <Input
-                value={localSchedule.schedule_cron_expr || ""}
-                onChange={(e) => handleScheduleChange({ schedule_cron_expr: e.target.value })}
-                placeholder="*/30 * * * *"
-                className="font-mono"
-              />
-            </div>
-            <Button onClick={handleValidateCron} variant="outline">
-              <FileCheck2 size={14} />
-              {t("settings.scheduler.validateCron")}
-            </Button>
-          </div>
-        </section>
-
-        <section className="space-y-2.5 rounded-lg border border-border/70 bg-muted/15 p-2.5">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <Label className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Activity size={14} />
-                {t("settings.scheduler.keepalive")}
-              </Label>
-              <p className="text-xs text-muted-foreground">{t("settings.scheduler.keepaliveDesc")}</p>
-            </div>
-            <Switch checked={localSchedule.keepalive_enabled} onCheckedChange={(checked) => handleScheduleChange({ keepalive_enabled: checked })} />
-          </div>
-          <div className="grid gap-2 xl:grid-cols-[minmax(0,180px)_auto_auto] xl:items-end">
-            <div className="w-full">
-              <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.scheduler.keepaliveInterval")}</Label>
-              <Input
-                type="number"
-                min={1}
-                max={1440}
-                value={localSchedule.keepalive_interval_minutes}
-                onChange={(e) => handleScheduleChange({ keepalive_interval_minutes: parseInt(e.target.value, 10) || 15 })}
-              />
-            </div>
-            <Button onClick={handleInstallSystemKeepalive} variant="outline" disabled={!systemKeepaliveSupported}>
-              <ServerCog size={14} />
-              {t("settings.scheduler.installKeepalive")}
-            </Button>
-            <Button onClick={handleUninstallSystemKeepalive} variant="ghost" disabled={!systemKeepaliveSupported}>
-              <X size={14} />
-              {t("settings.scheduler.uninstallKeepalive")}
-            </Button>
-          </div>
-          {!systemKeepaliveSupported && <p className="text-xs text-muted-foreground">{t("settings.scheduler.keepaliveUnsupported")}</p>}
-        </section>
-        </div>
+        <SettingGroup>
+          <SettingRow id={scheduleEnabledId} label={t("settings.scheduler.enable")} description={t("settings.scheduler.desc")}>
+            <Switch id={scheduleEnabledId} checked={localSchedule.schedule_enabled} onCheckedChange={(checked) => handleScheduleChange({ schedule_enabled: checked })} />
+          </SettingRow>
+          <SettingRow label={t("settings.scheduler.timesPerDay")} description={t("settings.scheduler.fixedTimeDesc", { defaultValue: "Choose how often and at what times Shelfy runs each day." })}>
+            <Select value={String(localSchedule.schedule_times_per_day)} onValueChange={(value) => handleScheduleChange({ schedule_times_per_day: parseInt(value, 10) })}>
+              <SelectTrigger className="h-8 w-32"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="1">{t("settings.scheduler.once")}</SelectItem><SelectItem value="2">{t("settings.scheduler.twice")}</SelectItem><SelectItem value="3">{t("settings.scheduler.thrice")}</SelectItem><SelectItem value="4">{t("settings.scheduler.fourTimes")}</SelectItem></SelectContent>
+            </Select>
+            {Array.from({ length: localSchedule.schedule_times_per_day }).map((_, idx) => {
+              const key = `schedule_time_${idx + 1}` as keyof ScheduleSettings;
+              return <Input key={key} aria-label={t("settings.scheduler.time", { number: idx + 1 })} type="time" value={(localSchedule[key] as string | null) || ""} onChange={(event) => handleScheduleChange({ [key]: event.target.value || null } as Partial<ScheduleSettings>)} className="h-8 w-28" />;
+            })}
+          </SettingRow>
+          <SettingRow id={cronEnabledId} label={t("settings.scheduler.cronEnable")} description={t("settings.scheduler.cronDesc")}>
+            <Input aria-label={t("settings.scheduler.cronExpression")} value={localSchedule.schedule_cron_expr || ""} onChange={(event) => handleScheduleChange({ schedule_cron_expr: event.target.value })} placeholder="*/30 * * * *" className="h-8 min-w-48 flex-1 font-mono" />
+            <Button type="button" onClick={handleValidateCron} variant="outline" size="sm"><FileCheck2 />{t("settings.scheduler.validateCron")}</Button>
+            <Switch id={cronEnabledId} checked={localSchedule.schedule_cron_enabled} onCheckedChange={(checked) => handleScheduleChange({ schedule_cron_enabled: checked })} />
+          </SettingRow>
+          <SettingRow id={keepaliveEnabledId} label={<span className="inline-flex items-center gap-1.5"><Activity className="size-3.5 text-primary" />{t("settings.scheduler.keepalive")}</span>} description={systemKeepaliveSupported ? t("settings.scheduler.keepaliveDesc") : t("settings.scheduler.keepaliveUnsupported")}>
+            <Input aria-label={t("settings.scheduler.keepaliveInterval")} type="number" min={1} max={1440} value={localSchedule.keepalive_interval_minutes} onChange={(event) => handleScheduleChange({ keepalive_interval_minutes: parseInt(event.target.value, 10) || 15 })} className="h-8 w-20" />
+            <span className="text-xs text-muted-foreground">{t("settings.scheduler.minutesShort", { defaultValue: "min" })}</span>
+            <Button type="button" onClick={handleInstallSystemKeepalive} variant="outline" size="sm" disabled={!systemKeepaliveSupported}><ServerCog />{t("settings.scheduler.installKeepalive")}</Button>
+            <Button type="button" onClick={handleUninstallSystemKeepalive} variant="ghost" size="sm" disabled={!systemKeepaliveSupported}><X />{t("settings.scheduler.uninstallKeepalive")}</Button>
+            <Switch id={keepaliveEnabledId} checked={localSchedule.keepalive_enabled} onCheckedChange={(checked) => handleScheduleChange({ keepalive_enabled: checked })} />
+          </SettingRow>
+          <SettingRow label={t("settings.scheduler.logs")} description={t("settings.scheduler.noLogs")}>
+            <Button type="button" onClick={loadSchedulerLogs} variant="outline" size="sm"><RefreshCw />{t("settings.scheduler.refreshLogs")}</Button>
+            <Button type="button" onClick={clearSchedulerLogs} variant="ghost" size="sm">{t("settings.scheduler.clearLogs")}</Button>
+          </SettingRow>
+        </SettingGroup>
 
         {scheduleToast && (
           <div
@@ -419,19 +320,7 @@ export function GeneralTab({
           </div>
         )}
 
-        <Button onClick={handleSaveSchedule}>
-          <AnimatedIcon icon={Save} size={14} motion="pulse" />
-          {t("settings.scheduler.save")}
-        </Button>
-
         <div className="space-y-1.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <Label className="text-sm text-muted-foreground">{t("settings.scheduler.logs")}</Label>
-            <div className="flex flex-wrap gap-1.5">
-              <Button onClick={loadSchedulerLogs} variant="outline" size="sm">{t("settings.scheduler.refreshLogs")}</Button>
-              <Button onClick={clearSchedulerLogs} variant="ghost" size="sm">{t("settings.scheduler.clearLogs")}</Button>
-            </div>
-          </div>
           <div className="max-h-40 overflow-auto rounded-lg border border-border bg-muted/30">
             {schedulerLogs.length === 0 ? (
               <div className="px-3 py-2 text-xs text-muted-foreground">{t("settings.scheduler.noLogs")}</div>
@@ -451,84 +340,39 @@ export function GeneralTab({
       </Card>
 
       <Card className="order-3 space-y-2.5 p-3">
-        <div>
-          <h3 className="flex items-center gap-2 text-base font-semibold">
-            <Bot size={16} className="text-primary" />
-            {t("settings.mcp.title")}
-          </h3>
-          <p className="text-xs text-muted-foreground">{t("settings.mcp.desc")}</p>
-        </div>
+        <SectionHeading
+          icon={<Bot size={15} className="text-primary" />}
+          title={t("settings.mcp.title")}
+          description={t("settings.mcp.desc")}
+          actions={<><Button type="button" onClick={handleCopyMcpConfig} variant="outline" size="sm" disabled={!mcpClientConfig}><Copy />{t("settings.mcp.copyConfig")}</Button><Button type="button" onClick={() => void handleOpenMcpHelp()} variant="outline" size="sm"><BookOpen />{t("settings.mcp.help")}</Button><Button type="button" onClick={handleSaveMcp} size="sm"><AnimatedIcon icon={Save} motion="pulse" />{t("settings.mcp.save")}</Button></>}
+        />
 
-        <div className="flex max-w-4xl items-center justify-between rounded-lg border border-border/70 bg-muted/20 p-3">
-          <div>
-            <Label className="text-sm text-muted-foreground">{t("settings.mcp.enable")}</Label>
-            <p className="text-xs text-muted-foreground">{t("settings.mcp.enableDesc")}</p>
-          </div>
-          <Switch checked={localMcp.mcp_enabled} onCheckedChange={(checked) => setLocalMcp({ ...localMcp, mcp_enabled: checked })} />
-        </div>
-
-        <div className="grid max-w-4xl gap-3 md:grid-cols-2">
-          <div>
-            <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.mcp.serverName")}</Label>
-            <Input value={localMcp.mcp_server_name} onChange={(e) => setLocalMcp({ ...localMcp, mcp_server_name: e.target.value })} placeholder="shelfy" />
-          </div>
-          <div>
-            <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.mcp.transport")}</Label>
+        <SettingGroup>
+          <SettingRow id={mcpEnabledId} label={t("settings.mcp.enable")} description={t("settings.mcp.enableDesc")}>
+            <Switch id={mcpEnabledId} checked={localMcp.mcp_enabled} onCheckedChange={(checked) => setLocalMcp({ ...localMcp, mcp_enabled: checked })} />
+          </SettingRow>
+          <SettingRow label={t("settings.mcp.serverName")} description={t("settings.mcp.transport")}>
+            <Input aria-label={t("settings.mcp.serverName")} value={localMcp.mcp_server_name} onChange={(event) => setLocalMcp({ ...localMcp, mcp_server_name: event.target.value })} placeholder="shelfy" className="h-8 min-w-44 flex-1" />
             <Select value={localMcp.mcp_transport} onValueChange={(value) => setLocalMcp({ ...localMcp, mcp_transport: value })}>
-              <SelectTrigger className="w-full sm:w-72">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="stdio">{t("settings.mcp.transportStdio")}</SelectItem>
-                <SelectItem value="http">{t("settings.mcp.transportHttp")}</SelectItem>
-              </SelectContent>
+              <SelectTrigger aria-label={t("settings.mcp.transport")} className="h-8 w-36"><SelectValue /></SelectTrigger>
+              <SelectContent><SelectItem value="stdio">{t("settings.mcp.transportStdio")}</SelectItem><SelectItem value="http">{t("settings.mcp.transportHttp")}</SelectItem></SelectContent>
             </Select>
-          </div>
-        </div>
-
-        {localMcp.mcp_transport === "http" ? (
-          <div className="grid max-w-4xl gap-3 md:grid-cols-2">
-            <div>
-              <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.mcp.httpUrl")}</Label>
-              <Input value={localMcp.mcp_http_url || ""} onChange={(e) => setLocalMcp({ ...localMcp, mcp_http_url: e.target.value })} placeholder="http://127.0.0.1:8765/mcp" />
-            </div>
-            <div>
-              <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.mcp.token")}</Label>
-              <Input value={localMcp.mcp_token || ""} onChange={(e) => setLocalMcp({ ...localMcp, mcp_token: e.target.value })} placeholder="optional" />
-            </div>
-          </div>
-        ) : (
-          <div className="grid max-w-4xl gap-3 md:grid-cols-2">
-            <div>
-              <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.mcp.command")}</Label>
-              <Input value={localMcp.mcp_command || ""} onChange={(e) => setLocalMcp({ ...localMcp, mcp_command: e.target.value })} placeholder={t("settings.mcp.commandPlaceholder")} />
-            </div>
-            <div>
-              <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.mcp.args")}</Label>
-              <Input value={localMcp.mcp_args || ""} onChange={(e) => setLocalMcp({ ...localMcp, mcp_args: e.target.value })} placeholder="--mcp" />
-            </div>
-          </div>
-        )}
-
-        <Label className="flex items-center gap-2 text-sm">
-          <Checkbox checked={localMcp.mcp_allow_write} onCheckedChange={(checked) => setLocalMcp({ ...localMcp, mcp_allow_write: checked === true })} />
-          {t("settings.mcp.allowWrite")}
-        </Label>
-
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={handleSaveMcp}>
-            <AnimatedIcon icon={Save} size={14} motion="pulse" />
-            {t("settings.mcp.save")}
-          </Button>
-          <Button onClick={handleCopyMcpConfig} variant="outline" disabled={!mcpClientConfig}>
-            <Copy size={14} />
-            {t("settings.mcp.copyConfig")}
-          </Button>
-          <Button onClick={() => void handleOpenMcpHelp()} variant="outline">
-            <BookOpen size={14} />
-            {t("settings.mcp.help")}
-          </Button>
-        </div>
+          </SettingRow>
+          {localMcp.mcp_transport === "http" ? (
+            <SettingRow label={t("settings.mcp.httpUrl")} description={t("settings.mcp.token")}>
+              <Input aria-label={t("settings.mcp.httpUrl")} value={localMcp.mcp_http_url || ""} onChange={(event) => setLocalMcp({ ...localMcp, mcp_http_url: event.target.value })} placeholder="http://127.0.0.1:8765/mcp" className="h-8 min-w-52 flex-1" />
+              <Input aria-label={t("settings.mcp.token")} value={localMcp.mcp_token || ""} onChange={(event) => setLocalMcp({ ...localMcp, mcp_token: event.target.value })} placeholder="optional" className="h-8 min-w-36 flex-1" />
+            </SettingRow>
+          ) : (
+            <SettingRow label={t("settings.mcp.command")} description={t("settings.mcp.args")}>
+              <Input aria-label={t("settings.mcp.command")} value={localMcp.mcp_command || ""} onChange={(event) => setLocalMcp({ ...localMcp, mcp_command: event.target.value })} placeholder={t("settings.mcp.commandPlaceholder")} className="h-8 min-w-52 flex-1" />
+              <Input aria-label={t("settings.mcp.args")} value={localMcp.mcp_args || ""} onChange={(event) => setLocalMcp({ ...localMcp, mcp_args: event.target.value })} placeholder="--mcp" className="h-8 min-w-36 flex-1" />
+            </SettingRow>
+          )}
+          <SettingRow label={t("settings.mcp.allowWrite")} description={t("settings.mcp.allowWriteDesc", { defaultValue: "Allow AI clients to change Shelfy data and run file operations." })}>
+            <Label className="flex items-center gap-2 text-xs text-muted-foreground"><Checkbox checked={localMcp.mcp_allow_write} onCheckedChange={(checked) => setLocalMcp({ ...localMcp, mcp_allow_write: checked === true })} />{t("settings.mcp.allowWrite")}</Label>
+          </SettingRow>
+        </SettingGroup>
 
         {mcpToast && (
           <div
@@ -559,24 +403,16 @@ export function GeneralTab({
       </div>
 
       <Card className="order-5 space-y-2.5 p-3">
-        <div>
-          <h3 className="text-base font-semibold">{t("settings.config.title")}</h3>
-          <p className="text-xs text-muted-foreground">{t("settings.config.desc")}</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Button onClick={handleExportConfig} variant="outline">
-            <AnimatedIcon icon={Download} size={14} motion="float" />
-            {t("settings.config.export")}
-          </Button>
-          <Button onClick={handleImportConfig} variant="outline">
-            <AnimatedIcon icon={Upload} size={14} motion="float" />
-            {t("settings.config.import")}
-          </Button>
-        </div>
-        <Label className="flex items-center gap-2 text-sm">
-          <Checkbox checked={replaceConfigOnImport} onCheckedChange={(checked) => setReplaceConfigOnImport(checked === true)} />
-          {t("settings.config.replaceOnImport")}
-        </Label>
+        <SectionHeading
+          title={t("settings.config.title")}
+          description={t("settings.config.desc")}
+          actions={<><Button type="button" onClick={handleExportConfig} variant="outline" size="sm"><AnimatedIcon icon={Download} motion="float" />{t("settings.config.export")}</Button><Button type="button" onClick={handleImportConfig} variant="outline" size="sm"><AnimatedIcon icon={Upload} motion="float" />{t("settings.config.import")}</Button></>}
+        />
+        <SettingGroup>
+          <SettingRow label={t("settings.config.replaceOnImport")} description={t("settings.config.desc")}>
+            <Label className="flex items-center gap-2 text-xs text-muted-foreground"><Checkbox checked={replaceConfigOnImport} onCheckedChange={(checked) => setReplaceConfigOnImport(checked === true)} />{t("settings.config.replaceOnImport")}</Label>
+          </SettingRow>
+        </SettingGroup>
         {configToast && (
           <div
             className={`rounded-lg border px-3 py-2 text-xs ${

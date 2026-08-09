@@ -86,6 +86,15 @@ const SYSTEM_ORDEN_TEMPLATES: &[SystemOrdenTemplate] = &[
         yaml: "rules:\n  - name: \"完整压缩包自动解压\"\n    locations:\n      - ~/Downloads\n    subfolders: false\n    filter_mode: any\n    filters:\n      - extension: [zip, 7z, rar]\n      - regex: '(?i)\\.7z\\.0*1$'\n    actions:\n      - extract:\n          dest: ~/Downloads/Unpacked/\n          format: auto\n          delete_original: true\n          on_conflict: rename_new\n",
     },
     SystemOrdenTemplate {
+        id: "watch-extract-confirm",
+        title_key: "settings.orden.templates.system.watchExtractConfirm.title",
+        description_key: "settings.orden.templates.system.watchExtractConfirm.description",
+        category_key: "settings.orden.templates.categories.automation",
+        icon: "folder-archive",
+        tone: "automation",
+        yaml: "rules:\n  - name: \"监控压缩包并确认解压\"\n    locations:\n      - ~/Downloads\n    targets: files\n    subfolders: false\n    filter_mode: any\n    filters:\n      - extension: [zip, 7z, rar]\n      - regex: '(?i)\\.7z\\.0*1$'\n    actions:\n      - extract:\n          dest: ~/Downloads/Unpacked/\n          format: auto\n          passwords: []\n          delete_original: true\n          recursive: true\n          max_depth: 3\n          on_conflict: rename_new\n          rename_template: '{name}_{counter}{extension}'\n          autodetect_folder: true\n",
+    },
+    SystemOrdenTemplate {
         id: "backup-pdfs",
         title_key: "settings.orden.templates.system.backup.title",
         description_key: "settings.orden.templates.system.backup.description",
@@ -127,6 +136,8 @@ pub struct OrdenTemplateAutomation {
     interval_minutes: i64,
     watch_paths: String,
     path_exists: Option<String>,
+    #[serde(default)]
+    require_confirmation: bool,
 }
 
 fn system_template_automation(name: &str) -> Option<OrdenTemplateAutomation> {
@@ -138,6 +149,16 @@ fn system_template_automation(name: &str) -> Option<OrdenTemplateAutomation> {
             interval_minutes: 60,
             watch_paths: "~/Downloads".to_string(),
             path_exists: Some("~/Downloads".to_string()),
+            require_confirmation: false,
+        }),
+        "watch-extract-confirm" => Some(OrdenTemplateAutomation {
+            mode: "monitor".to_string(),
+            cron_expr: None,
+            fixed_time: None,
+            interval_minutes: 60,
+            watch_paths: "~/Downloads".to_string(),
+            path_exists: Some("~/Downloads".to_string()),
+            require_confirmation: true,
         }),
         _ => None,
     }
@@ -861,29 +882,40 @@ pub fn orden_delete_job_cmd(id: i64) -> Result<(), String> {
 }
 
 #[tauri::command]
-pub fn orden_run_job_cmd(job: OrdenJob) -> Result<crate::orden_runtime::OrdenTaskHandle, String> {
+pub fn orden_run_job_cmd(
+    job: OrdenJob,
+    confirmed: bool,
+) -> Result<crate::orden_runtime::OrdenTaskHandle, String> {
     let task = crate::orden_runtime::spawn(move || {
+        let simulate = crate::orden_jobs::manual_job_simulate(&job, confirmed);
         let yaml = get_orden_config(&job.config_name)
             .map_err(|e| e.to_string())?
             .map(|record| record.yaml)
             .ok_or_else(|| format!("Orden config '{}' not found", job.config_name))?;
         let opts = crate::orden::ExecuteOptions {
-            simulate: job.simulate,
+            simulate,
             tags: split_csv(&job.tags).into_iter().collect(),
             skip_tags: split_csv(&job.skip_tags).into_iter().collect(),
             working_dir: std::env::current_dir().unwrap_or_default(),
-            preview: job.simulate.then(crate::orden::PreviewOptions::default),
+            preview: if job.require_confirmation && !confirmed {
+                Some(crate::orden::PreviewOptions {
+                    max_scan_entries: usize::MAX,
+                    max_matches: u64::MAX,
+                })
+            } else {
+                simulate.then(crate::orden::PreviewOptions::default)
+            },
         };
         let result = match crate::orden::run_yaml(&yaml, &opts) {
             Ok(result) => result,
             Err(error) => {
-                log_orden_failure(&job.config_name, job.simulate, "manual-job", &error);
+                log_orden_failure(&job.config_name, simulate, "manual-job", &error);
                 return Err(error);
             }
         };
         let _ = log_orden_run(
             &job.config_name,
-            job.simulate,
+            simulate,
             result.success as i64,
             result.errors as i64,
             "manual-job",
@@ -891,6 +923,9 @@ pub fn orden_run_job_cmd(job: OrdenJob) -> Result<crate::orden_runtime::OrdenTas
         );
         if let Some(id) = job.id {
             let _ = mark_orden_job_run(id);
+            if confirmed && !simulate && result.errors == 0 {
+                let _ = clear_orden_job_pending(id);
+            }
         }
         serde_json::to_value(map_run_result(result)).map_err(|error| error.to_string())
     });
@@ -963,6 +998,27 @@ mod tests {
         assert_eq!(automation.cron_expr.as_deref(), Some("0 8,14,20 * * *"));
         crate::scheduler::validate_cron_expression(automation.cron_expr.as_deref().unwrap())
             .unwrap();
+    }
+
+    #[test]
+    fn confirmed_watch_extract_template_exposes_editable_archive_flow() {
+        let template = find_system_template("watch-extract-confirm").unwrap();
+        crate::orden::Config::from_string(template.yaml).unwrap();
+
+        let visual = orden_visual_from_yaml_cmd(template.yaml.to_string()).unwrap();
+        let rule = &visual.rules[0];
+        assert_eq!(rule.location, "~/Downloads");
+        assert_eq!(rule.action, "extract");
+        assert_eq!(rule.destination, "~/Downloads/Unpacked/");
+        assert!(rule.delete_original);
+        assert!(rule.archive_passwords.is_empty());
+        assert!(rule.action_steps[0].value.contains("recursive: true"));
+        assert!(rule.action_steps[0].value.contains("max_depth: 3"));
+
+        let automation = system_template_automation(template.id).unwrap();
+        assert_eq!(automation.mode, "monitor");
+        assert_eq!(automation.watch_paths, "~/Downloads");
+        assert!(automation.require_confirmation);
     }
 
     #[test]

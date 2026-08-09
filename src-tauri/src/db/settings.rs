@@ -15,6 +15,8 @@ pub struct AppSettings {
     pub telemetry_enabled: bool,
     pub first_run: bool,
     pub autostart: bool,
+    #[serde(default)]
+    pub auto_update: bool,
     pub grace_period_seconds: i64,
     pub lock_check_enabled: bool,
     pub schedule_enabled: bool,
@@ -71,7 +73,7 @@ pub fn get_settings() -> SqliteResult<AppSettings> {
     let db = get_db();
     let conn = db.lock().unwrap();
     conn.query_row(
-        "SELECT id, language, theme, telemetry_enabled, first_run, autostart, grace_period_seconds, lock_check_enabled, schedule_enabled, schedule_times_per_day, schedule_time_1, schedule_time_2, schedule_time_3, schedule_time_4, schedule_cron_enabled, schedule_cron_expr, keepalive_enabled, keepalive_interval_minutes, mcp_enabled, mcp_allow_write, mcp_transport, mcp_server_name, mcp_command, mcp_args, mcp_http_url, mcp_token FROM settings LIMIT 1",
+        "SELECT id, language, theme, telemetry_enabled, first_run, autostart, auto_update, grace_period_seconds, lock_check_enabled, schedule_enabled, schedule_times_per_day, schedule_time_1, schedule_time_2, schedule_time_3, schedule_time_4, schedule_cron_enabled, schedule_cron_expr, keepalive_enabled, keepalive_interval_minutes, mcp_enabled, mcp_allow_write, mcp_transport, mcp_server_name, mcp_command, mcp_args, mcp_http_url, mcp_token FROM settings LIMIT 1",
         [],
         |row| {
             Ok(AppSettings {
@@ -81,30 +83,31 @@ pub fn get_settings() -> SqliteResult<AppSettings> {
                 telemetry_enabled: row.get::<_, i32>(3)? != 0,
                 first_run: row.get::<_, i32>(4)? != 0,
                 autostart: row.get::<_, i32>(5).unwrap_or(1) != 0,
-                grace_period_seconds: row.get::<_, i64>(6).unwrap_or(300),
-                lock_check_enabled: row.get::<_, i32>(7).unwrap_or(1) != 0,
-                schedule_enabled: row.get::<_, i32>(8).unwrap_or(0) != 0,
-                schedule_times_per_day: row.get::<_, i64>(9).unwrap_or(1),
-                schedule_time_1: row.get(10).ok(),
-                schedule_time_2: row.get(11).ok(),
-                schedule_time_3: row.get(12).ok(),
-                schedule_time_4: row.get(13).ok(),
-                schedule_cron_enabled: row.get::<_, i32>(14).unwrap_or(0) != 0,
-                schedule_cron_expr: row.get(15).ok(),
-                keepalive_enabled: row.get::<_, i32>(16).unwrap_or(0) != 0,
-                keepalive_interval_minutes: row.get::<_, i64>(17).unwrap_or(15).clamp(1, 1440),
-                mcp_enabled: row.get::<_, i32>(18).unwrap_or(0) != 0,
-                mcp_allow_write: row.get::<_, i32>(19).unwrap_or(0) != 0,
+                auto_update: row.get::<_, i32>(6).unwrap_or(0) != 0,
+                grace_period_seconds: row.get::<_, i64>(7).unwrap_or(300),
+                lock_check_enabled: row.get::<_, i32>(8).unwrap_or(1) != 0,
+                schedule_enabled: row.get::<_, i32>(9).unwrap_or(0) != 0,
+                schedule_times_per_day: row.get::<_, i64>(10).unwrap_or(1),
+                schedule_time_1: row.get(11).ok(),
+                schedule_time_2: row.get(12).ok(),
+                schedule_time_3: row.get(13).ok(),
+                schedule_time_4: row.get(14).ok(),
+                schedule_cron_enabled: row.get::<_, i32>(15).unwrap_or(0) != 0,
+                schedule_cron_expr: row.get(16).ok(),
+                keepalive_enabled: row.get::<_, i32>(17).unwrap_or(0) != 0,
+                keepalive_interval_minutes: row.get::<_, i64>(18).unwrap_or(15).clamp(1, 1440),
+                mcp_enabled: row.get::<_, i32>(19).unwrap_or(0) != 0,
+                mcp_allow_write: row.get::<_, i32>(20).unwrap_or(0) != 0,
                 mcp_transport: row
-                    .get::<_, String>(20)
+                    .get::<_, String>(21)
                     .unwrap_or_else(|_| default_mcp_transport()),
                 mcp_server_name: row
-                    .get::<_, String>(21)
+                    .get::<_, String>(22)
                     .unwrap_or_else(|_| default_mcp_server_name()),
-                mcp_command: row.get(22).ok(),
-                mcp_args: row.get(23).ok(),
-                mcp_http_url: row.get(24).ok(),
-                mcp_token: row.get(25).ok(),
+                mcp_command: row.get(23).ok(),
+                mcp_args: row.get(24).ok(),
+                mcp_http_url: row.get(25).ok(),
+                mcp_token: row.get(26).ok(),
             })
         },
     )
@@ -117,13 +120,14 @@ pub fn update_settings(settings: &AppSettings) -> SqliteResult<()> {
         .query_row("SELECT id FROM settings LIMIT 1", [], |row| row.get(0))
         .unwrap_or(settings.id.unwrap_or(1));
     conn.execute(
-        "UPDATE settings SET language=?1, theme=?2, telemetry_enabled=?3, first_run=?4, autostart=?5, grace_period_seconds=?6, lock_check_enabled=?7, schedule_enabled=?8, schedule_times_per_day=?9, schedule_time_1=?10, schedule_time_2=?11, schedule_time_3=?12, schedule_time_4=?13, schedule_cron_enabled=?14, schedule_cron_expr=?15, keepalive_enabled=?16, keepalive_interval_minutes=?17, mcp_enabled=?18, mcp_allow_write=?19, mcp_transport=?20, mcp_server_name=?21, mcp_command=?22, mcp_args=?23, mcp_http_url=?24, mcp_token=?25 WHERE id=?26",
+        "UPDATE settings SET language=?1, theme=?2, telemetry_enabled=?3, first_run=?4, autostart=?5, auto_update=?6, grace_period_seconds=?7, lock_check_enabled=?8, schedule_enabled=?9, schedule_times_per_day=?10, schedule_time_1=?11, schedule_time_2=?12, schedule_time_3=?13, schedule_time_4=?14, schedule_cron_enabled=?15, schedule_cron_expr=?16, keepalive_enabled=?17, keepalive_interval_minutes=?18, mcp_enabled=?19, mcp_allow_write=?20, mcp_transport=?21, mcp_server_name=?22, mcp_command=?23, mcp_args=?24, mcp_http_url=?25, mcp_token=?26 WHERE id=?27",
         params![
             settings.language,
             settings.theme,
             settings.telemetry_enabled as i32,
             settings.first_run as i32,
             settings.autostart as i32,
+            settings.auto_update as i32,
             settings.grace_period_seconds,
             settings.lock_check_enabled as i32,
             settings.schedule_enabled as i32,

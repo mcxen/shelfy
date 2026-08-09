@@ -1,5 +1,6 @@
 use crate::db::{
-    get_orden_config, list_orden_jobs, log_scheduler_event, mark_orden_job_run, OrdenJob,
+    get_orden_config, list_orden_jobs, log_scheduler_event, mark_orden_job_run,
+    update_orden_job_pending, OrdenJob,
 };
 use chrono::{DateTime, Duration, Local, NaiveTime, Utc};
 use once_cell::sync::Lazy;
@@ -8,6 +9,10 @@ use std::collections::HashSet;
 use std::sync::Mutex;
 
 static RUNNING_JOBS: Lazy<Mutex<HashSet<String>>> = Lazy::new(|| Mutex::new(HashSet::new()));
+
+pub fn manual_job_simulate(job: &OrdenJob, confirmed: bool) -> bool {
+    job.simulate || (job.require_confirmation && !confirmed)
+}
 
 fn job_key(job: &OrdenJob) -> String {
     job.id
@@ -164,6 +169,7 @@ pub fn run_monitor_jobs(event_path: &std::path::Path) -> Result<(usize, usize, u
 }
 
 pub fn run_job_result(job: &OrdenJob, _trigger: &str) -> Result<crate::orden::RunResult, String> {
+    let simulate = job.simulate || job.require_confirmation;
     let yaml = get_orden_config(&job.config_name)
         .map_err(|e| e.to_string())?
         .map(|record| record.yaml)
@@ -172,21 +178,27 @@ pub fn run_job_result(job: &OrdenJob, _trigger: &str) -> Result<crate::orden::Ru
         return Ok(crate::orden::RunResult {
             success: 0,
             errors: 0,
-            simulate: job.simulate,
+            simulate,
             logs: Vec::new(),
         });
     }
     let opts = crate::orden::ExecuteOptions {
-        simulate: job.simulate,
+        simulate,
         tags: split_csv(&job.tags).into_iter().collect(),
         skip_tags: split_csv(&job.skip_tags).into_iter().collect(),
         working_dir: std::env::current_dir().unwrap_or_default(),
-        preview: None,
+        preview: job
+            .require_confirmation
+            .then_some(crate::orden::PreviewOptions {
+                max_scan_entries: usize::MAX,
+                max_matches: u64::MAX,
+            }),
     };
     crate::orden::run_yaml(&yaml, &opts)
 }
 
 fn run_job_summary(job: &OrdenJob, trigger: &str) -> Result<(usize, usize), String> {
+    let simulate = job.simulate || job.require_confirmation;
     let _ = log_scheduler_event(
         "info",
         "orden_job_started",
@@ -205,23 +217,39 @@ fn run_job_summary(job: &OrdenJob, trigger: &str) -> Result<(usize, usize), Stri
             }]);
             let _ = crate::db::log_orden_run(
                 &job.config_name,
-                job.simulate,
+                simulate,
                 0,
                 1,
                 trigger,
                 &logs.to_string(),
             );
+            if job.require_confirmation {
+                if let Some(id) = job.id {
+                    let _ = update_orden_job_pending(id, 0, 1, &logs.to_string());
+                }
+            }
             return Err(error);
         }
     };
+    let logs_json = serde_json::to_string(&result.logs).unwrap_or_else(|_| "[]".to_string());
     let _ = crate::db::log_orden_run(
         &job.config_name,
-        job.simulate,
+        simulate,
         result.success as i64,
         result.errors as i64,
         trigger,
-        &serde_json::to_string(&result.logs).unwrap_or_else(|_| "[]".to_string()),
+        &logs_json,
     );
+    if job.require_confirmation {
+        if let Some(id) = job.id {
+            let _ = update_orden_job_pending(
+                id,
+                result.success as i64,
+                result.errors as i64,
+                &logs_json,
+            );
+        }
+    }
     let _ = log_scheduler_event(
         if result.errors > 0 { "warn" } else { "info" },
         "orden_job_finished",
@@ -400,11 +428,16 @@ mod validation_tests {
             tags: String::new(),
             skip_tags: String::new(),
             simulate: true,
+            require_confirmation: false,
             min_file_count: 0,
             path_exists: None,
             time_window_start: None,
             time_window_end: None,
             last_run_at: None,
+            pending_success: 0,
+            pending_errors: 0,
+            pending_logs_json: "[]".into(),
+            pending_scanned_at: None,
             created_at: now,
             updated_at: now,
         }
@@ -417,5 +450,17 @@ mod validation_tests {
         assert!(validate_job(&value)
             .unwrap_err()
             .contains("interval_minutes"));
+    }
+
+    #[test]
+    fn confirmation_only_allows_real_manual_run_after_approval() {
+        let mut approval = job("manual");
+        approval.simulate = false;
+        approval.require_confirmation = true;
+        assert!(manual_job_simulate(&approval, false));
+        assert!(!manual_job_simulate(&approval, true));
+
+        approval.simulate = true;
+        assert!(manual_job_simulate(&approval, true));
     }
 }

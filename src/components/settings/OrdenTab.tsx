@@ -62,6 +62,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
   const [ordenDetailName, setOrdenDetailName] = useState<string | null>(null);
   const [ordenJobsRows, setOrdenJobsRows] = useState<OrdenJob[]>([]);
   const [editingOrdenJob, setEditingOrdenJob] = useState<OrdenJob | null>(null);
+  const [confirmOrdenJob, setConfirmOrdenJob] = useState<OrdenJob | null>(null);
   const [ordenBusy, setOrdenBusy] = useState(false);
   const [ordenToast, setOrdenToast] = useState<{ message: string; type: "success" | "error" } | null>(null);
   const reportFolderAccessError = (error: { path: string; error: string; permission_denied: boolean } | null) => {
@@ -369,6 +370,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
         interval_minutes: template.automation.interval_minutes,
         watch_paths: template.automation.watch_paths,
         path_exists: template.automation.path_exists,
+        require_confirmation: template.automation.require_confirmation,
       });
       setOrdenJobsRows(await ordenJobs());
     }
@@ -444,11 +446,16 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
     tags: ordenTags,
     skip_tags: ordenSkipTags,
     simulate: false,
+    require_confirmation: false,
     min_file_count: 0,
     path_exists: null,
     time_window_start: null,
     time_window_end: null,
     last_run_at: null,
+    pending_success: 0,
+    pending_errors: 0,
+    pending_logs_json: "[]",
+    pending_scanned_at: null,
     created_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
   });
@@ -501,10 +508,14 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
     setOrdenJobsRows(await ordenJobs());
   };
 
-  const handleRunOrdenJob = async (job: OrdenJob) => {
+  const handleRunOrdenJob = async (job: OrdenJob, confirmed = false) => {
+    if (job.require_confirmation && !job.simulate && !confirmed) {
+      setConfirmOrdenJob(job);
+      return;
+    }
     setOrdenBusy(true);
     try {
-      const result = await ordenRunJob(job);
+      const result = await ordenRunJob(job, confirmed);
       setOrdenResult(result);
       setOrdenPreviewError(null);
       setPreviewReturnView("list");
@@ -520,6 +531,25 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
     } finally {
       setOrdenBusy(false);
     }
+  };
+
+  const handleReviewPendingJob = (job: OrdenJob) => {
+    let logs: OrdenRunResult["logs"] = [];
+    try {
+      const parsed = JSON.parse(job.pending_logs_json || "[]");
+      if (Array.isArray(parsed)) logs = parsed;
+    } catch {
+      logs = [];
+    }
+    setOrdenResult({
+      success: job.pending_success,
+      errors: job.pending_errors,
+      simulate: true,
+      logs,
+    });
+    setOrdenPreviewError(null);
+    setPreviewReturnView("list");
+    setOrdenView("preview");
   };
 
   const refreshOrdenHistory = async (name: string) => {
@@ -995,7 +1025,8 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                   </div>
                   <div className="flex items-end gap-4">
                     <Label className="flex items-center gap-2 text-sm"><Switch checked={editingOrdenJob.enabled} onCheckedChange={(checked) => setEditingOrdenJob({ ...editingOrdenJob, enabled: checked })} /> {t("settings.orden.enabled")}</Label>
-                    <Label className="flex items-center gap-2 text-sm"><Switch checked={editingOrdenJob.simulate} onCheckedChange={(checked) => setEditingOrdenJob({ ...editingOrdenJob, simulate: checked })} /> {t("settings.orden.simulate")}</Label>
+                    <Label className="flex items-center gap-2 text-sm"><Switch checked={editingOrdenJob.simulate} onCheckedChange={(checked) => setEditingOrdenJob({ ...editingOrdenJob, simulate: checked, require_confirmation: checked ? false : editingOrdenJob.require_confirmation })} /> {t("settings.orden.simulate")}</Label>
+                    <Label className="flex items-center gap-2 text-sm"><Switch checked={editingOrdenJob.require_confirmation} onCheckedChange={(checked) => setEditingOrdenJob({ ...editingOrdenJob, require_confirmation: checked, simulate: checked ? false : editingOrdenJob.simulate })} /> {t("settings.orden.requireConfirmation")}</Label>
                   </div>
                   {editingOrdenJob.mode === "cron" && <div>
                     <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.cronExpression")}</Label>
@@ -1051,12 +1082,12 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                   <TableBody>
                     {ordenJobsRows.map((job) => (
                       <TableRow key={job.id || job.name}>
-                        <TableCell><div className="font-medium">{job.name}</div>{job.simulate && <div className="mt-1 text-xs text-muted-foreground">{t("settings.orden.simulate")}</div>}</TableCell>
+                        <TableCell><div className="font-medium">{job.name}</div><div className="mt-1 flex flex-wrap gap-1">{job.simulate && <Badge variant="outline">{t("settings.orden.simulate")}</Badge>}{job.require_confirmation && <Badge variant="outline">{t("settings.orden.awaitingConfirmation")}</Badge>}{job.pending_scanned_at && <Badge variant={job.pending_errors > 0 ? "destructive" : "secondary"}>{job.pending_errors > 0 ? t("settings.orden.preflightErrors", { count: job.pending_errors }) : t("settings.orden.pendingCount", { count: job.pending_success })}</Badge>}</div></TableCell>
                         <TableCell className="text-muted-foreground">{job.config_name}</TableCell>
                         <TableCell><Badge variant="outline">{ordenJobModeLabel(t, job.mode)}</Badge></TableCell>
                         <TableCell><div className="flex items-center gap-2"><Switch checked={job.enabled} onCheckedChange={(enabled) => ordenSaveJob({ ...job, enabled }).then(() => ordenJobs()).then(setOrdenJobsRows)} aria-label={t("settings.orden.toggleTask", { name: job.name })} /><span className="text-xs text-muted-foreground">{job.enabled ? t("settings.orden.running") : t("settings.orden.stopped")}</span></div></TableCell>
                         <TableCell className="text-xs text-muted-foreground">{job.last_run_at ? new Date(job.last_run_at).toLocaleString() : "—"}</TableCell>
-                        <TableCell><div className="flex justify-end gap-1"><Button onClick={() => handleRunOrdenJob(job)} disabled={ordenBusy} variant="ghost" size="icon-sm" aria-label={t("settings.orden.runTask", { name: job.name })}><Play size={14} /></Button><Button onClick={() => setEditingOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.editTask", { name: job.name })}><Pencil size={14} /></Button><Button onClick={() => handleDeleteOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.deleteTask", { name: job.name })} className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 size={14} /></Button></div></TableCell>
+                        <TableCell><div className="flex justify-end gap-1">{job.pending_scanned_at && <Button onClick={() => handleReviewPendingJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.reviewPending", { name: job.name })}><Eye size={14} /></Button>}<Button onClick={() => handleRunOrdenJob(job)} disabled={ordenBusy} variant="ghost" size="icon-sm" aria-label={t("settings.orden.runTask", { name: job.name })}><Play size={14} /></Button><Button onClick={() => setEditingOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.editTask", { name: job.name })}><Pencil size={14} /></Button><Button onClick={() => handleDeleteOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.deleteTask", { name: job.name })} className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 size={14} /></Button></div></TableCell>
                       </TableRow>
                     ))}
                     {ordenJobsRows.length === 0 && <TableRow><TableCell colSpan={6} className="py-5 text-center text-muted-foreground">{t("settings.orden.noTasks")}</TableCell></TableRow>}
@@ -1065,7 +1096,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
               </div>
               <div className="space-y-2 min-[900px]:hidden">
                 {ordenJobsRows.map((job) => <div key={job.id || job.name} className="rounded-lg border border-border p-3">
-                  <div className="flex items-start justify-between gap-2"><div className="min-w-0"><div className="truncate text-sm font-medium">{job.name}</div><div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><span>{job.config_name}</span><Badge variant="outline">{ordenJobModeLabel(t, job.mode)}</Badge>{job.simulate && <span>{t("settings.orden.simulate")}</span>}</div></div><div className="flex shrink-0 items-center gap-1"><Tooltip><TooltipTrigger asChild><Button onClick={() => handleRunOrdenJob(job)} disabled={ordenBusy} variant="ghost" size="icon-sm" aria-label={t("settings.orden.runTask", { name: job.name })}><Play size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.runTask", { name: job.name })}</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><Button onClick={() => setEditingOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.editTask", { name: job.name })}><Pencil size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.editTask", { name: job.name })}</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><Button onClick={() => handleDeleteOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.deleteTask", { name: job.name })} className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.deleteTask", { name: job.name })}</TooltipContent></Tooltip></div></div>
+                  <div className="flex items-start justify-between gap-2"><div className="min-w-0"><div className="truncate text-sm font-medium">{job.name}</div><div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"><span>{job.config_name}</span><Badge variant="outline">{ordenJobModeLabel(t, job.mode)}</Badge>{job.simulate && <span>{t("settings.orden.simulate")}</span>}{job.require_confirmation && <Badge variant="outline">{t("settings.orden.awaitingConfirmation")}</Badge>}{job.pending_scanned_at && <Badge variant={job.pending_errors > 0 ? "destructive" : "secondary"}>{job.pending_errors > 0 ? t("settings.orden.preflightErrors", { count: job.pending_errors }) : t("settings.orden.pendingCount", { count: job.pending_success })}</Badge>}</div></div><div className="flex shrink-0 items-center gap-1">{job.pending_scanned_at && <Tooltip><TooltipTrigger asChild><Button onClick={() => handleReviewPendingJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.reviewPending", { name: job.name })}><Eye size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.reviewPending", { name: job.name })}</TooltipContent></Tooltip>}<Tooltip><TooltipTrigger asChild><Button onClick={() => handleRunOrdenJob(job)} disabled={ordenBusy} variant="ghost" size="icon-sm" aria-label={t("settings.orden.runTask", { name: job.name })}><Play size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.runTask", { name: job.name })}</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><Button onClick={() => setEditingOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.editTask", { name: job.name })}><Pencil size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.editTask", { name: job.name })}</TooltipContent></Tooltip><Tooltip><TooltipTrigger asChild><Button onClick={() => handleDeleteOrdenJob(job)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.deleteTask", { name: job.name })} className="text-destructive hover:bg-destructive/10 hover:text-destructive"><Trash2 size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.deleteTask", { name: job.name })}</TooltipContent></Tooltip></div></div>
                   <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground"><Switch checked={job.enabled} onCheckedChange={(enabled) => ordenSaveJob({ ...job, enabled }).then(() => ordenJobs()).then(setOrdenJobsRows)} aria-label={t("settings.orden.toggleTask", { name: job.name })} /><span>{job.enabled ? t("settings.orden.running") : t("settings.orden.stopped")}</span><span>{job.last_run_at ? new Date(job.last_run_at).toLocaleString() : "—"}</span></div>
                 </div>)}
                 {ordenJobsRows.length === 0 && <div className="rounded-lg border border-dashed border-border px-3 py-4 text-center text-sm text-muted-foreground">{t("settings.orden.noTasks")}</div>}
@@ -1176,6 +1207,34 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
             <AlertDialogFooter>
               <AlertDialogClose render={<Button type="button" variant="outline" />}>{t("common.cancel")}</AlertDialogClose>
               <Button type="button" variant="destructive" onClick={discardEditorChanges}>{t("settings.orden.discard")}</Button>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        </AlertDialog>
+
+        <AlertDialog open={confirmOrdenJob !== null} onOpenChange={(open) => { if (!open) setConfirmOrdenJob(null); }}>
+          <AlertDialogPopup>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("settings.orden.confirmExecutionTitle")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("settings.orden.confirmExecutionDesc", {
+                  name: confirmOrdenJob?.name || "",
+                  count: confirmOrdenJob?.pending_success || 0,
+                  errors: confirmOrdenJob?.pending_errors || 0,
+                })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button type="button" variant="outline" />}>{t("common.cancel")}</AlertDialogClose>
+              <AlertDialogClose
+                render={<Button type="button" variant="destructive" />}
+                onClick={() => {
+                  const job = confirmOrdenJob;
+                  setConfirmOrdenJob(null);
+                  if (job) void handleRunOrdenJob(job, true);
+                }}
+              >
+                {t("settings.orden.confirmAndRun")}
+              </AlertDialogClose>
             </AlertDialogFooter>
           </AlertDialogPopup>
         </AlertDialog>

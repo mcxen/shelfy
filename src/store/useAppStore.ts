@@ -42,6 +42,7 @@ export interface AppSettings {
   telemetry_enabled: boolean;
   first_run: boolean;
   autostart: boolean;
+  auto_update: boolean;
   grace_period_seconds: number;
   lock_check_enabled: boolean;
   schedule_enabled: boolean;
@@ -70,6 +71,7 @@ export const defaultSettings: AppSettings = {
   telemetry_enabled: false,
   first_run: true,
   autostart: true,
+  auto_update: false,
   grace_period_seconds: 300,
   lock_check_enabled: true,
   schedule_enabled: false,
@@ -128,6 +130,11 @@ export interface UpdateInfo {
   published_at: string | null;
   asset_name: string | null;
   asset_url: string | null;
+  release_url: string | null;
+  sha256: string | null;
+  size: number | null;
+  can_install: boolean;
+  install_reason: string | null;
 }
 
 export interface FolderAccessStatus {
@@ -191,11 +198,16 @@ export interface OrdenJob {
   tags: string;
   skip_tags: string;
   simulate: boolean;
+  require_confirmation: boolean;
   min_file_count: number;
   path_exists: string | null;
   time_window_start: string | null;
   time_window_end: string | null;
   last_run_at: string | null;
+  pending_success: number;
+  pending_errors: number;
+  pending_logs_json: string;
+  pending_scanned_at: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -264,12 +276,13 @@ export interface OrdenTemplate {
 }
 
 export interface OrdenTemplateAutomation {
-  mode: 'cron' | 'fixed' | 'interval';
+  mode: 'cron' | 'fixed' | 'interval' | 'monitor';
   cron_expr: string | null;
   fixed_time: string | null;
   interval_minutes: number;
   watch_paths: string;
   path_exists: string | null;
+  require_confirmation: boolean;
 }
 
 // Orden tasks poll the backend for completion. If a file operation hangs
@@ -368,7 +381,7 @@ interface AppState {
   installSystemKeepalive: (intervalMinutes: number) => Promise<void>;
   uninstallSystemKeepalive: () => Promise<void>;
   checkUpdate: () => Promise<UpdateInfo>;
-  installUpdate: (info: UpdateInfo) => Promise<void>;
+  installUpdate: () => Promise<void>;
   exportRules: (path: string) => Promise<void>;
   importRules: (path: string, replace: boolean) => Promise<number>;
   exportConfig: (path: string) => Promise<void>;
@@ -393,7 +406,7 @@ interface AppState {
   ordenJobs: () => Promise<OrdenJob[]>;
   ordenSaveJob: (job: OrdenJob) => Promise<number>;
   ordenDeleteJob: (id: number) => Promise<void>;
-  ordenRunJob: (job: OrdenJob) => Promise<OrdenRunResult>;
+  ordenRunJob: (job: OrdenJob, confirmed?: boolean) => Promise<OrdenRunResult>;
   cancelOrdenTask: () => void;
   getMcpClientConfig: () => Promise<McpClientConfig>;
   getMcpHelp: (language: string) => Promise<string>;
@@ -610,8 +623,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     return await invoke<UpdateInfo>('check_update_cmd');
   },
 
-  installUpdate: async (info) => {
-    await invoke('install_update_cmd', { info });
+  installUpdate: async () => {
+    await invoke('install_update_cmd');
   },
 
   exportRules: async (path) => {
@@ -699,8 +712,8 @@ export const useAppStore = create<AppState>((set, get) => ({
   ordenDeleteJob: async (id) => {
     await invoke('orden_delete_job_cmd', { id });
   },
-  ordenRunJob: async (job) => {
-    const handle = await invoke<OrdenTaskHandle>('orden_run_job_cmd', { job });
+  ordenRunJob: async (job, confirmed = false) => {
+    const handle = await invoke<OrdenTaskHandle>('orden_run_job_cmd', { job, confirmed });
     return await waitForOrdenTask(handle.task_id, startOrdenTaskAbort());
   },
   cancelOrdenTask: () => { ordenTaskAbort?.abort(); },

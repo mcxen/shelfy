@@ -152,11 +152,16 @@ pub fn init_db(app_dir: PathBuf) -> SqliteResult<()> {
             tags TEXT NOT NULL DEFAULT '',
             skip_tags TEXT NOT NULL DEFAULT '',
             simulate INTEGER NOT NULL DEFAULT 0,
+            require_confirmation INTEGER NOT NULL DEFAULT 0,
             min_file_count INTEGER NOT NULL DEFAULT 0,
             path_exists TEXT,
             time_window_start TEXT,
             time_window_end TEXT,
             last_run_at TEXT,
+            pending_success INTEGER NOT NULL DEFAULT 0,
+            pending_errors INTEGER NOT NULL DEFAULT 0,
+            pending_logs_json TEXT NOT NULL DEFAULT '[]',
+            pending_scanned_at TEXT,
             created_at TEXT NOT NULL,
             updated_at TEXT NOT NULL
         )",
@@ -171,6 +176,12 @@ pub fn init_db(app_dir: PathBuf) -> SqliteResult<()> {
     if !cols.iter().any(|c| c == "autostart") {
         conn.execute(
             "ALTER TABLE settings ADD COLUMN autostart INTEGER NOT NULL DEFAULT 1",
+            [],
+        )?;
+    }
+    if !cols.iter().any(|c| c == "auto_update") {
+        conn.execute(
+            "ALTER TABLE settings ADD COLUMN auto_update INTEGER NOT NULL DEFAULT 0",
             [],
         )?;
     }
@@ -269,6 +280,41 @@ pub fn init_db(app_dir: PathBuf) -> SqliteResult<()> {
     }
     if !cols.iter().any(|c| c == "mcp_token") {
         conn.execute("ALTER TABLE settings ADD COLUMN mcp_token TEXT", [])?;
+    }
+
+    let job_cols: Vec<String> = conn
+        .prepare("PRAGMA table_info(orden_jobs)")?
+        .query_map([], |row| row.get::<_, String>(1))?
+        .collect::<Result<Vec<_>, _>>()?;
+    if !job_cols.iter().any(|c| c == "require_confirmation") {
+        conn.execute(
+            "ALTER TABLE orden_jobs ADD COLUMN require_confirmation INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    if !job_cols.iter().any(|c| c == "pending_success") {
+        conn.execute(
+            "ALTER TABLE orden_jobs ADD COLUMN pending_success INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    if !job_cols.iter().any(|c| c == "pending_errors") {
+        conn.execute(
+            "ALTER TABLE orden_jobs ADD COLUMN pending_errors INTEGER NOT NULL DEFAULT 0",
+            [],
+        )?;
+    }
+    if !job_cols.iter().any(|c| c == "pending_logs_json") {
+        conn.execute(
+            "ALTER TABLE orden_jobs ADD COLUMN pending_logs_json TEXT NOT NULL DEFAULT '[]'",
+            [],
+        )?;
+    }
+    if !job_cols.iter().any(|c| c == "pending_scanned_at") {
+        conn.execute(
+            "ALTER TABLE orden_jobs ADD COLUMN pending_scanned_at TEXT",
+            [],
+        )?;
     }
     // Insert default settings if empty
     let count: i64 = conn.query_row("SELECT COUNT(*) FROM settings", [], |row| row.get(0))?;

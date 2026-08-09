@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -70,7 +71,11 @@ pub struct ExtractArchive {
     pub on_conflict: ConflictMode,
     pub rename_template: String,
     pub autodetect_folder: bool,
+    pub recursive: bool,
+    pub max_depth: usize,
 }
+
+const MAX_RECURSIVE_ARCHIVES: usize = 1000;
 
 impl ExtractArchive {
     pub fn new(
@@ -81,6 +86,8 @@ impl ExtractArchive {
         on_conflict: ConflictMode,
         rename_template: String,
         autodetect_folder: bool,
+        recursive: bool,
+        max_depth: usize,
     ) -> Self {
         Self {
             dest,
@@ -90,7 +97,162 @@ impl ExtractArchive {
             on_conflict,
             rename_template,
             autodetect_folder,
+            recursive,
+            max_depth: max_depth.clamp(1, 10),
         }
+    }
+
+    fn extract_one(
+        &self,
+        src: &Path,
+        destination: &str,
+        format: ArchiveFormat,
+        res: &mut Resource,
+        simulate: bool,
+        output: &dyn Output,
+    ) -> Result<PathBuf, String> {
+        let requested_src = src.to_path_buf();
+        let resolved_src = resolve_first_7z_volume(src)?;
+        let src = resolved_src.as_path();
+        if src != requested_src {
+            output.msg(
+                res,
+                &format!(
+                    "Resolved split archive volume {} to first volume {}",
+                    requested_src.display(),
+                    src.display()
+                ),
+                "archive-test",
+                Level::Info,
+            );
+            res.path = Some(src.to_path_buf());
+        }
+        if !src.is_file() {
+            return Err("extract: source must be a file".into());
+        }
+        let src_name = archive_stem(src).ok_or("extract: source has no filename")?;
+        let dest_rendered = template::render(destination, &res.dict())?;
+        let dest =
+            prepare_target_path(&src_name, &dest_rendered, self.autodetect_folder, simulate)?;
+        let format = ArchiveFormat::detect_for_extract(src, format)?;
+        let source_files = archive_source_files(src, format)?;
+
+        match format {
+            ArchiveFormat::Zip => {
+                test_zip(src, &self.passwords)?;
+                extract_zip(
+                    src,
+                    &dest,
+                    &self.passwords,
+                    self.on_conflict,
+                    &self.rename_template,
+                    res,
+                    output,
+                    simulate,
+                )?
+            }
+            ArchiveFormat::SevenZip | ArchiveFormat::Rar => {
+                extract_with_7z(src, &dest, &self.passwords, res, output, simulate)?
+            }
+            ArchiveFormat::Auto => unreachable!(),
+        }
+
+        output.msg(
+            res,
+            &format!("Extracted {} to {}", src.display(), dest.display()),
+            "extract",
+            Level::Info,
+        );
+        if self.delete_original {
+            for source_file in source_files {
+                output.msg(
+                    res,
+                    &format!("Deleting original archive {}", source_file.display()),
+                    "extract",
+                    Level::Info,
+                );
+                if !simulate {
+                    fs::remove_file(&source_file).map_err(|e| e.to_string())?;
+                }
+            }
+            res.path = Some(dest.clone());
+        }
+        Ok(dest)
+    }
+
+    fn extract_recursively(
+        &self,
+        root: &Path,
+        res: &Resource,
+        output: &dyn Output,
+        mut seen: HashSet<PathBuf>,
+    ) -> Result<(), String> {
+        let mut frontier = collect_nested_archives(root)?;
+        let mut processed = 0usize;
+
+        for depth in 1..=self.max_depth {
+            if frontier.is_empty() {
+                return Ok(());
+            }
+            let mut next = Vec::new();
+            for archive in frontier {
+                let key = fs::canonicalize(&archive).unwrap_or_else(|_| archive.clone());
+                if !seen.insert(key) {
+                    continue;
+                }
+                if processed >= MAX_RECURSIVE_ARCHIVES {
+                    output.msg(
+                        res,
+                        &format!(
+                            "Recursive extraction stopped after {} nested archives",
+                            MAX_RECURSIVE_ARCHIVES
+                        ),
+                        "extract",
+                        Level::Warn,
+                    );
+                    return Ok(());
+                }
+                processed += 1;
+                let parent = archive.parent().unwrap_or(root);
+                let destination = format!("{}{}", parent.display(), std::path::MAIN_SEPARATOR);
+                let nested_name = archive_stem(&archive)
+                    .ok_or("extract: nested archive source has no filename")?;
+                let planned_dest =
+                    prepare_target_path(&nested_name, &destination, self.autodetect_folder, true)?;
+                for existing in collect_nested_archives(&planned_dest)? {
+                    seen.insert(fs::canonicalize(&existing).unwrap_or(existing));
+                }
+                let mut nested_res = Resource::new(
+                    archive.clone(),
+                    parent.to_path_buf(),
+                    res.rule_nr,
+                    res.rule_name.clone(),
+                );
+                let nested_dest = self.extract_one(
+                    &archive,
+                    &destination,
+                    ArchiveFormat::Auto,
+                    &mut nested_res,
+                    false,
+                    output,
+                )?;
+                next.extend(collect_nested_archives(&nested_dest)?);
+            }
+            if depth == self.max_depth && !next.is_empty() {
+                output.msg(
+                    res,
+                    &format!(
+                        "Recursive extraction reached the configured depth limit ({})",
+                        self.max_depth
+                    ),
+                    "extract",
+                    Level::Warn,
+                );
+                return Ok(());
+            }
+            frontier = next;
+        }
+        Ok(())
     }
 }
 
@@ -143,58 +305,32 @@ impl Action for ExtractArchive {
         output: &dyn Output,
     ) -> Result<(), String> {
         let src = res.path.clone().ok_or("extract: no path")?;
-        if !src.is_file() {
-            return Err("extract: source must be a file".into());
-        }
-        let src_name = archive_stem(&src).ok_or("extract: source has no filename")?;
-        let dest_rendered = template::render(&self.dest, &res.dict())?;
-        let dest =
-            prepare_target_path(&src_name, &dest_rendered, self.autodetect_folder, simulate)?;
-        let format = ArchiveFormat::detect_for_extract(&src, self.format)?;
-        let source_files = archive_source_files(&src, format)?;
-
-        match format {
-            ArchiveFormat::Zip => {
-                if !simulate {
-                    test_zip(&src, &self.passwords)?;
-                }
-                extract_zip(
-                    &src,
-                    &dest,
-                    &self.passwords,
-                    self.on_conflict,
-                    &self.rename_template,
-                    res,
-                    output,
-                    simulate,
-                )?
+        let destination = self.dest.clone();
+        let mut existing_archives = HashSet::new();
+        if self.recursive && !simulate {
+            let src_name = archive_stem(&src).ok_or("extract: source has no filename")?;
+            let rendered = template::render(&destination, &res.dict())?;
+            let planned_dest =
+                prepare_target_path(&src_name, &rendered, self.autodetect_folder, true)?;
+            for existing in collect_nested_archives(&planned_dest)? {
+                existing_archives.insert(fs::canonicalize(&existing).unwrap_or(existing));
             }
-            ArchiveFormat::SevenZip | ArchiveFormat::Rar => {
-                extract_with_7z(&src, &dest, &self.passwords, res, output, simulate)?
-            }
-            ArchiveFormat::Auto => unreachable!(),
         }
-
-        output.msg(
-            res,
-            &format!("Extracted {} to {}", src.display(), dest.display()),
-            "extract",
-            Level::Info,
-        );
-
-        if self.delete_original {
-            for source_file in source_files {
+        let dest = self.extract_one(&src, &destination, self.format, res, simulate, output)?;
+        if self.recursive {
+            if simulate {
                 output.msg(
                     res,
-                    &format!("Deleting original archive {}", source_file.display()),
+                    &format!(
+                        "Nested archives will be extracted after confirmation (maximum depth {})",
+                        self.max_depth
+                    ),
                     "extract",
                     Level::Info,
                 );
-                if !simulate {
-                    fs::remove_file(&source_file).map_err(|e| e.to_string())?;
-                }
+            } else {
+                self.extract_recursively(&dest, res, output, existing_archives)?;
             }
-            res.path = Some(dest);
         }
         Ok(())
     }
@@ -445,8 +581,32 @@ fn choose_zip_password(src: &Path, index: usize, passwords: &[String]) -> Result
     ))
 }
 
-fn find_7z_command() -> Option<&'static str> {
-    ["7z", "7zz", "7za"].into_iter().find(|cmd| {
+fn seven_zip_candidates() -> Vec<PathBuf> {
+    let candidates = ["7z", "7zz", "7za"]
+        .into_iter()
+        .map(PathBuf::from)
+        .collect::<Vec<_>>();
+    #[cfg(target_os = "windows")]
+    {
+        let mut candidates = candidates;
+        for variable in ["ProgramW6432", "ProgramFiles", "ProgramFiles(x86)"] {
+            if let Some(root) = std::env::var_os(variable) {
+                let candidate = PathBuf::from(root).join("7-Zip").join("7z.exe");
+                if !candidates.contains(&candidate) {
+                    candidates.push(candidate);
+                }
+            }
+        }
+        candidates
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        candidates
+    }
+}
+
+fn find_7z_command() -> Option<PathBuf> {
+    seven_zip_candidates().into_iter().find(|cmd| {
         std::process::Command::new(cmd)
             .arg("--help")
             .output()
@@ -463,17 +623,17 @@ fn run_7z_command(
 ) -> Result<(), String> {
     let cmd = find_7z_command().ok_or_else(|| {
         format!(
-            "{}: 7z/7zz/7za command not found. Install 7-Zip to handle 7z/rar archives.",
+            "{}: 7z/7zz/7za command not found in PATH or a standard 7-Zip install directory. Install 7-Zip to handle 7z/rar archives.",
             sender
         )
     })?;
     output.msg(
         res,
-        &format!("Running {} {}", cmd, display_7z_args(args)),
+        &format!("Running {} {}", cmd.display(), display_7z_args(args)),
         sender,
         Level::Info,
     );
-    let out = std::process::Command::new(cmd)
+    let out = std::process::Command::new(&cmd)
         .args(args)
         .stdin(std::process::Stdio::null())
         .output()
@@ -524,9 +684,6 @@ fn extract_with_7z(
         "extract",
         Level::Info,
     );
-    if simulate {
-        return Ok(());
-    }
     let candidates = if passwords.is_empty() {
         vec![String::new()]
     } else {
@@ -557,6 +714,16 @@ fn extract_with_7z(
         last_err
             .unwrap_or_else(|| "extract: archive is incomplete or no password worked".to_string())
     })?;
+
+    output.msg(
+        res,
+        "Archive integrity and password verified",
+        "archive-test",
+        Level::Info,
+    );
+    if simulate {
+        return Ok(());
+    }
 
     fs::create_dir_all(dest).map_err(|e| e.to_string())?;
     let mut args = vec![
@@ -605,6 +772,48 @@ fn archive_stem(path: &Path) -> Option<String> {
         .map(|name| name.to_string_lossy().to_string())
 }
 
+fn is_nested_archive(path: &Path) -> bool {
+    if let Some(volume) = seven_zip_volume(path) {
+        return volume.part == 1;
+    }
+    matches!(
+        path.extension()
+            .and_then(|extension| extension.to_str())
+            .unwrap_or_default()
+            .to_ascii_lowercase()
+            .as_str(),
+        "zip" | "7z" | "rar"
+    )
+}
+
+fn collect_nested_archives(root: &Path) -> Result<Vec<PathBuf>, String> {
+    if !root.exists() {
+        return Ok(Vec::new());
+    }
+    let mut archives = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(path) = stack.pop() {
+        let metadata = fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+        if metadata.file_type().is_symlink() {
+            continue;
+        }
+        if metadata.is_file() {
+            if is_nested_archive(&path) {
+                archives.push(path);
+            }
+            continue;
+        }
+        if !metadata.is_dir() {
+            continue;
+        }
+        for entry in fs::read_dir(&path).map_err(|error| error.to_string())? {
+            stack.push(entry.map_err(|error| error.to_string())?.path());
+        }
+    }
+    archives.sort();
+    Ok(archives)
+}
+
 fn archive_source_files(src: &Path, format: ArchiveFormat) -> Result<Vec<PathBuf>, String> {
     if format != ArchiveFormat::SevenZip {
         return Ok(vec![src.to_path_buf()]);
@@ -643,6 +852,29 @@ fn archive_source_files(src: &Path, format: ArchiveFormat) -> Result<Vec<PathBuf
         }
     }
     Ok(parts.into_iter().map(|(_, path)| path).collect())
+}
+
+fn resolve_first_7z_volume(src: &Path) -> Result<PathBuf, String> {
+    let Some(volume) = seven_zip_volume(src) else {
+        return Ok(src.to_path_buf());
+    };
+    if volume.part == 1 {
+        return Ok(src.to_path_buf());
+    }
+    let first_name = format!("{}.{:0width$}", volume.prefix, 1, width = volume.width);
+    let first = src
+        .parent()
+        .unwrap_or_else(|| Path::new("."))
+        .join(first_name);
+    if first.is_file() {
+        Ok(first)
+    } else {
+        Err(format!(
+            "extract: first split archive volume is missing; expected {} for {}",
+            first.display(),
+            src.display()
+        ))
+    }
 }
 
 fn compress_with_7z(
@@ -771,8 +1003,17 @@ mod tests {
         let parts =
             archive_source_files(&root.join("bundle.7z.01"), ArchiveFormat::SevenZip).unwrap();
         assert_eq!(parts.len(), 3);
+        assert_eq!(
+            resolve_first_7z_volume(&root.join("bundle.7z.03")).unwrap(),
+            root.join("bundle.7z.01")
+        );
         assert!(archive_source_files(&root.join("bundle.7z.02"), ArchiveFormat::SevenZip).is_err());
 
+        fs::remove_file(root.join("bundle.7z.01")).unwrap();
+        assert!(resolve_first_7z_volume(&root.join("bundle.7z.03"))
+            .unwrap_err()
+            .contains("first split archive volume is missing"));
+        fs::write(root.join("bundle.7z.01"), b"part").unwrap();
         fs::remove_file(root.join("bundle.7z.02")).unwrap();
         assert!(archive_source_files(&root.join("bundle.7z.01"), ArchiveFormat::SevenZip).is_err());
         fs::remove_dir_all(root).unwrap();
@@ -784,5 +1025,93 @@ mod tests {
             display_7z_args(&["t".into(), "-psecret".into(), "file.7z".into()]),
             "t -p******** file.7z"
         );
+    }
+
+    #[test]
+    fn seven_zip_lookup_keeps_command_name_fallbacks() {
+        let candidates = seven_zip_candidates();
+        assert!(candidates.contains(&PathBuf::from("7z")));
+        assert!(candidates.contains(&PathBuf::from("7zz")));
+        assert!(candidates.contains(&PathBuf::from("7za")));
+    }
+
+    #[test]
+    fn simulated_extract_verifies_password_without_writing_files() {
+        let root = temp_dir("approval-preflight");
+        fs::create_dir_all(&root).unwrap();
+        let source = root.join("payload.txt");
+        let archive = root.join("payload.zip");
+        let destination = root.join("unpacked");
+        fs::write(&source, b"verified content").unwrap();
+        create_zip(&source, &archive, Some("correct-password")).unwrap();
+
+        let mut wrong = ExtractArchive::new(
+            destination.to_string_lossy().to_string(),
+            ArchiveFormat::Zip,
+            vec!["wrong-password".into()],
+            true,
+            ConflictMode::RenameNew,
+            "{name}_{counter}{extension}".into(),
+            false,
+            false,
+            3,
+        );
+        let mut wrong_resource =
+            Resource::new(archive.clone(), root.clone(), 0, Some("preflight".into()));
+        assert!(wrong.pipeline(&mut wrong_resource, true).is_err());
+
+        let mut verified = ExtractArchive::new(
+            destination.to_string_lossy().to_string(),
+            ArchiveFormat::Zip,
+            vec!["correct-password".into()],
+            true,
+            ConflictMode::RenameNew,
+            "{name}_{counter}{extension}".into(),
+            false,
+            false,
+            3,
+        );
+        let mut verified_resource =
+            Resource::new(archive.clone(), root.clone(), 0, Some("preflight".into()));
+        verified.pipeline(&mut verified_resource, true).unwrap();
+
+        assert!(archive.exists());
+        assert!(!destination.exists());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn recursive_extract_processes_nested_archives_and_respects_depth_limit() {
+        let root = temp_dir("recursive-depth");
+        fs::create_dir_all(&root).unwrap();
+        let payload = root.join("payload.txt");
+        let deepest = root.join("deepest.zip");
+        let inner = root.join("inner.zip");
+        let outer = root.join("outer.zip");
+        let destination = root.join("unpacked");
+        fs::write(&payload, b"nested payload").unwrap();
+        create_zip(&payload, &deepest, None).unwrap();
+        create_zip(&deepest, &inner, None).unwrap();
+        create_zip(&inner, &outer, None).unwrap();
+
+        let mut action = ExtractArchive::new(
+            format!("{}{}", destination.display(), std::path::MAIN_SEPARATOR),
+            ArchiveFormat::Auto,
+            Vec::new(),
+            true,
+            ConflictMode::RenameNew,
+            "{name}_{counter}{extension}".into(),
+            true,
+            true,
+            1,
+        );
+        let mut resource = Resource::new(outer.clone(), root.clone(), 0, Some("nested".into()));
+        action.pipeline(&mut resource, false).unwrap();
+
+        assert!(!outer.exists());
+        assert!(!destination.join("outer/inner.zip").exists());
+        assert!(destination.join("outer/inner/deepest.zip").exists());
+        assert!(!destination.join("outer/inner/deepest/payload.txt").exists());
+        fs::remove_dir_all(root).unwrap();
     }
 }

@@ -128,7 +128,7 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] symlink
 - [x] hardlink
 - [x] shell（std::process::Command sh -c）
-- [x] extract / compress（ZIP 解压/压缩、7z/RAR、密码列表、7z.01/7z.001 分卷完整性预检、成功后删除整组源卷）
+- [x] extract / compress（ZIP 解压/压缩、7z/RAR、密码列表、任意 7z 分卷自动定位 .01/.001 首卷、完整性预检、成功后删除整组源卷）
 
 ### 阶段 3：配置与执行
 - [x] location.rs Location + 默认排除
@@ -183,6 +183,7 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] Orden 流程编排增强方向连线、步骤间插入点与拖拽重排，并保留键盘可达的顺序按钮
 - [x] 模版中心重构为目标分类、流程摘要、文件影响提示和“使用后直接进入 Visual 编辑”的渐进式入口
 - [x] “完整压缩包自动解压”系统模版绑定推荐自动化：每天 08:00/14:00/20:00 扫描，使用模版时同步创建 Cron 任务
+- [x] 新增“监控压缩包，确认后解压”系统模版：源/目标目录可选、密码本、成功删除源包，并默认创建 monitor + 执行前确认任务
 - [x] 新增 `shelfy --mcp` / `shelfy --cli mcp` stdio MCP 服务
 - [x] MCP 写工具由独立 `mcp_allow_write` 控制
 - [ ] Visual 模式保留复杂 YAML 的 round-trip 注释/未知字段
@@ -203,6 +204,8 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] MCP 增加结构化 `shelfy_save_orden_job`，明确 manual/fixed/cron/interval/monitor，并区分“每隔 60 分钟”和“每个整点”
 - [x] macOS 后台 `--autostart` 单实例唤醒保持窗口隐藏，避免 keepalive 周期性弹出主窗口
 - [x] macOS release 首次启动安装用户级 `shelfy` CLI 包装器并接入 zsh/bash PATH
+- [x] 参考 Qx 完成应用内更新：latest.json 检查、SHA256/大小校验、手动下载安装、可选自动安装、helper 回滚替换与重启
+- [x] 统一 macOS stable/versioned 发布归档，补齐 Homebrew Cask、Universal bundle 校验与不可写安装降级路径
 - [x] Orden 运行历史改为可点击详情 Dialog，支持日志搜索与每页 50 条分页
 - [x] Settings/Popup 增加可见窗口拖拽抓手；基础 Rules 新增/编辑改为桌面式悬浮 Dialog
 - [x] Orden 配置中心支持按名称/备注搜索，并在超过 6 条时统一分页
@@ -221,6 +224,8 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] 更新 `AGENTS.md` 快速定位索引与 Architecture 的 Visual 参数/UI 基础设施章节，减少后续重复检索
 - [x] 全局滚动条按 UI_SPEC 统一为明暗主题 token 绘制，覆盖页面、Portal 浮层、Select、Dialog、表格与文本域
 - [x] Orden 可视化编辑器为全部动作绘制类型化参数表单，补齐解压密码列表与压缩密码输入/显隐控制
+- [x] Orden 自动运行增加“执行前确认”：后台预检压缩包完整性与候选密码并保存待确认快照，用户确认后才真实解压/删除源包
+- [x] extract 增加可视化 `recursive/max_depth`：继续处理本次产生的内部压缩包，并以路径去重、符号链接隔离、深度和总量上限防止死循环
 - [x] Orden 编辑器属性区建立独立 surface 层级；标签、跳过标签与扩展名短值改为可添加/删除的 Tag 输入
 - [x] P0 菜单浮层：Menu Portal、碰撞检测与键盘焦点
 - [x] P0 模版中心筛选：系统模版/我的模版切换时同步详情选择
@@ -229,6 +234,8 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] P0 Rules / Orden 响应式操作区：700px 与 900px 不裁切
 - [ ] P1 全局颜色与按钮尺寸：拉开 surface 层级，移除偏黄正文和品牌外渐变，建立 28/32px 按钮层级
 - [x] P1 页面密度：Rules / General / Template / Orden / History 的 Card、表格、工具栏和空状态已完成
+- [x] P1 General 设置行重构：统一左右列、Switch 右边线和 28/32px 按钮层级，宽屏关联控件保持单行
+- [x] P1 模版中心窄屏详情密度：三段流程并排、摘要与主操作同排，极窄窗口回退单列
 - [ ] P2 交互可访问性：Tooltip、表单标签、本地化枚举，并用 Dialog/Alert Dialog 替代审计范围内原生 prompt/confirm
 - [ ] 回归验收：浅色/深色、中文/英文、700×500、900×650、1280×800
 - [x] 新增 `docs/UI_AUDIT.md`，完成 6 张截图的问题编号、代码根因、建议与验收标准映射
@@ -244,13 +251,14 @@ Settings → Advanced 是当前图形入口，支持：
 
 ## 当前阻塞
 
-- 暂无编译阻塞。`cargo test` 与前端 `npm run build` 已通过。
-- 7z/RAR 与 7z 分卷依赖系统 `7z` / `7zz` / `7za`；缺少命令时任务会报错并保留全部源文件。当前开发环境未安装该命令，真实分卷命令级端到端验证需在已安装 7-Zip 的环境补做。
+- 暂无编译阻塞。`cargo test`（含加密 ZIP 预检不落盘测试）与前端 `npm run build` 已通过。
+- 7z/RAR 与 7z 分卷依赖系统 `7z` / `7zz` / `7za`；Windows 会额外探测标准 7-Zip 安装目录，缺少命令时任务会报错并保留全部源文件。当前开发环境未安装该命令，真实分卷命令级端到端验证需在已安装 7-Zip 的环境补做。
 - 品牌图标与主题替换已通过 `npm run build`、`cargo build`；Tray 资产哈希校验保持不变。
 - 剩余设计点：非 move/rename 的 orden 动作如何进入 Shelfy History/Undo 需要单独定义语义，避免 copy/delete/trash/shell 被现有“反向 rename”撤销逻辑误处理。
 - 已被旧版 Orden 模板写入磁盘的乱码文件名无法在不扫描和确认目标的情况下安全自动恢复；需要单独设计预览式修复工具。
 - UI 阶段 9 的 Rules / General / Template / Orden / History P1 页面密度已完成；剩余为全局主题和按钮体系修复。
-- Orden 卡片流程和新模版中心已通过 `npm run build`；真实 Tauri 窗口的 700/900/1280 截图验收仍待可用的桌面自动化环境完成。
+- Orden 卡片流程和新模版中心（含窄屏详情紧凑布局）已通过 `npm run build`；真实 Tauri 窗口的 700/900/1280 截图验收仍待可用的桌面自动化环境完成。
+- 应用内更新、Homebrew Cask 与 stable 发布资产契约已完成；需要下一次真实版本 tag 发布后验证 GitHub `latest.json`/stable ZIP 重定向、Cask 安装升级、应用内替换和重启全链路。
 
 ## 下一步
 
