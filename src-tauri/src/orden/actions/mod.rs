@@ -117,7 +117,7 @@ pub fn build_action(def: &ActionDef) -> Result<Box<dyn Action>, String> {
         ))),
         "extract" | "unarchive" | "decompress" => Ok(Box::new(ExtractArchive::new(
             as_string(&def.value, &def.name, "dest")?,
-            ArchiveFormat::parse(&parse_str(&def.value, "format", "zip"))?,
+            ArchiveFormat::parse(&parse_str(&def.value, "format", "auto"))?,
             parse_string_list(&def.value, "passwords", "password"),
             parse_bool(&def.value, "delete_original", false),
             parse_conflict(&def.value, "rename_new")?,
@@ -128,7 +128,7 @@ pub fn build_action(def: &ActionDef) -> Result<Box<dyn Action>, String> {
         ))),
         "compress" | "archive" => Ok(Box::new(CompressArchive::new(
             as_string(&def.value, &def.name, "dest")?,
-            ArchiveFormat::parse(&parse_str(&def.value, "format", "zip"))?,
+            ArchiveFormat::parse(&parse_str(&def.value, "format", "auto"))?,
             parse_optional_str(&def.value, "password"),
             parse_bool(&def.value, "delete_original", false),
             parse_conflict(&def.value, "rename_new")?,

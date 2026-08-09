@@ -473,6 +473,7 @@
         "levels": { "info": "Info", "warn": "Warning", "error": "Error", "debug": "Debug" },
         "steps": {
           "extension": { "label": "File type", "hint": "Match extensions such as PDF or PNG" },
+          "archivefile": { "label": "Archive", "hint": "Detect ZIP, 7z, or RAR from file content, regardless of extension" },
           "name": { "label": "File name", "hint": "Match a name or wildcard pattern" },
           "regex": { "label": "Pattern", "hint": "Use a regular expression" },
           "size": { "label": "File size", "hint": "Compare file or folder size" },

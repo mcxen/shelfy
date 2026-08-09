@@ -8,10 +8,9 @@ interface TagInputProps {
   placeholder?: string;
   ariaLabel: string;
   className?: string;
-  maskValues?: boolean;
 }
 
-export function TagInput({ value, onChange, placeholder, ariaLabel, className, maskValues = false }: TagInputProps) {
+export function TagInput({ value, onChange, placeholder, ariaLabel, className }: TagInputProps) {
   const [draft, setDraft] = useState("");
 
   const addDraft = (raw = draft) => {
@@ -33,8 +32,8 @@ export function TagInput({ value, onChange, placeholder, ariaLabel, className, m
     <div className={cn("flex min-h-9 w-full flex-wrap items-center gap-1.5 rounded-lg border border-input bg-background px-2 py-1 shadow-sm transition-colors focus-within:border-ring focus-within:ring-2 focus-within:ring-ring/20", className)}>
       {value.map((tag) => (
         <span key={tag} className="inline-flex h-6 max-w-full items-center gap-1 rounded-md bg-secondary px-2 text-xs font-medium text-secondary-foreground">
-          <span className="truncate">{maskValues ? "•".repeat(Math.min(Math.max(tag.length, 4), 12)) : tag}</span>
-          <button type="button" onClick={() => onChange(value.filter((item) => item !== tag))} className="-mr-1 rounded p-0.5 text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={maskValues ? ariaLabel : `${ariaLabel}: ${tag}`}>
+          <span className="truncate">{tag}</span>
+          <button type="button" onClick={() => onChange(value.filter((item) => item !== tag))} className="-mr-1 rounded p-0.5 text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${ariaLabel}: ${tag}`}>
             <X className="size-3" />
           </button>
         </span>

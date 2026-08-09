@@ -186,7 +186,9 @@ Orden 动作与运行过程的展示统一通过 `src/lib/ordenI18n.ts` 映射 `
 - 前端字段 schema：`src/components/settings/OrdenStepParameterEditor.tsx`
 - 默认示例：`src/components/settings/OrdenPipelineEditor.tsx::PRESETS`
 
-新增或修改 filter/action 参数时，必须同步核对这四处。类型化编辑器当前覆盖移动、复制、重命名、解压、压缩、链接、写文件、日志、Shell、废纸篓和永久删除等全部可选动作。解压使用密码候选列表 `passwords`，可用 `recursive + max_depth` 有界处理内部压缩包；压缩使用单密码 `password`。密码 UI 必须遮蔽显示。
+新增或修改 filter/action 参数时，必须同步核对这四处。类型化编辑器当前覆盖移动、复制、重命名、解压、压缩、链接、写文件、日志、Shell、废纸篓和永久删除等全部可选动作。解压使用密码候选列表 `passwords`，可用 `recursive + max_depth` 有界处理内部压缩包；压缩使用单密码 `password`。密码字段、候选标签及 7-Zip 运行日志按用户要求直接显示明文。
+
+`archivefile` 过滤器及 `extract format: auto` 通过文件头识别 ZIP、7z、RAR，不依赖普通文件扩展名；分卷 7z 仍通过卷号命名定位首卷，再读取首卷文件头。递归解压发现内部压缩包时复用相同的内容识别。`compress format: auto` 从渲染后的目标文件名选择 7z/RAR，否则回退 ZIP。
 
 短值列表统一走 `TagInput`，底层仍保存原有逗号字符串或 YAML sequence。适用范围包括配置 tags/skip-tags、规则 tags、任务 tags、extension、MIME 和其他短枚举列表。路径、命令和自由文本不要为了复用 TagInput 而强行拆分。
 

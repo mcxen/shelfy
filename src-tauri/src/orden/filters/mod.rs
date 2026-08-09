@@ -2,6 +2,7 @@ use std::collections::BTreeMap;
 
 use crate::orden::filter::FilterMode;
 
+pub mod archive;
 pub mod created;
 pub mod duplicate;
 pub mod empty;
@@ -16,6 +17,7 @@ pub mod regex;
 pub mod size;
 pub mod timefilter;
 
+pub use archive::Archive;
 pub use created::Created;
 pub use duplicate::{DetectMethod, Duplicate};
 pub use empty::Empty;
@@ -79,6 +81,7 @@ fn parse_key_value(raw_key: &str, value: serde_yaml::Value) -> Result<FilterDef,
 /// Instantiate a filter from its definition.
 pub fn build_filter(def: &FilterDef) -> Result<Box<dyn Filter>, String> {
     let inner: Box<dyn Filter> = match def.name.as_str() {
+        "archivefile" | "archive_format" => Box::new(Archive),
         "extension" => {
             let exts = as_string_list(&def.value, &def.name)?;
             Box::new(Extension::new(exts))

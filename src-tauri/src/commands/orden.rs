@@ -74,7 +74,7 @@ const SYSTEM_ORDEN_TEMPLATES: &[SystemOrdenTemplate] = &[
         category_key: "settings.orden.templates.categories.organize",
         icon: "archive",
         tone: "organize",
-        yaml: "rules:\n  - name: \"整理压缩包\"\n    locations:\n      - ~/Downloads\n    filters:\n      - extension: [zip, 7z, rar, tar, gz]\n    actions:\n      - move: ~/Downloads/Archives/\n",
+        yaml: "rules:\n  - name: \"整理压缩包\"\n    locations:\n      - ~/Downloads\n    filters:\n      - archivefile\n    actions:\n      - move: ~/Downloads/Archives/\n",
     },
     SystemOrdenTemplate {
         id: "extract-downloads",
@@ -83,7 +83,7 @@ const SYSTEM_ORDEN_TEMPLATES: &[SystemOrdenTemplate] = &[
         category_key: "settings.orden.templates.categories.automation",
         icon: "folder-archive",
         tone: "automation",
-        yaml: "rules:\n  - name: \"完整压缩包自动解压\"\n    locations:\n      - ~/Downloads\n    subfolders: false\n    filter_mode: any\n    filters:\n      - extension: [zip, 7z, rar]\n      - regex: '(?i)\\.7z\\.0*1$'\n    actions:\n      - extract:\n          dest: ~/Downloads/Unpacked/\n          format: auto\n          delete_original: true\n          on_conflict: rename_new\n",
+        yaml: "rules:\n  - name: \"完整压缩包自动解压\"\n    locations:\n      - ~/Downloads\n    subfolders: false\n    filters:\n      - archivefile\n    actions:\n      - extract:\n          dest: ~/Downloads/Unpacked/\n          format: auto\n          delete_original: true\n          on_conflict: rename_new\n",
     },
     SystemOrdenTemplate {
         id: "watch-extract-confirm",
@@ -92,7 +92,7 @@ const SYSTEM_ORDEN_TEMPLATES: &[SystemOrdenTemplate] = &[
         category_key: "settings.orden.templates.categories.automation",
         icon: "folder-archive",
         tone: "automation",
-        yaml: "rules:\n  - name: \"监控压缩包并确认解压\"\n    locations:\n      - ~/Downloads\n    targets: files\n    subfolders: false\n    filter_mode: any\n    filters:\n      - extension: [zip, 7z, rar]\n      - regex: '(?i)\\.7z\\.0*1$'\n    actions:\n      - extract:\n          dest: ~/Downloads/Unpacked/\n          format: auto\n          passwords: []\n          delete_original: true\n          recursive: true\n          max_depth: 3\n          on_conflict: rename_new\n          rename_template: '{name}_{counter}{extension}'\n          autodetect_folder: true\n",
+        yaml: "rules:\n  - name: \"监控压缩包并确认解压\"\n    locations:\n      - ~/Downloads\n    targets: files\n    subfolders: false\n    filters:\n      - archivefile\n    actions:\n      - extract:\n          dest: ~/Downloads/Unpacked/\n          format: auto\n          passwords: []\n          delete_original: true\n          recursive: true\n          max_depth: 3\n          on_conflict: rename_new\n          rename_template: '{name}_{counter}{extension}'\n          autodetect_folder: true\n",
     },
     SystemOrdenTemplate {
         id: "backup-pdfs",
@@ -990,7 +990,8 @@ mod tests {
     fn extract_template_is_valid_and_scheduled_three_times_daily() {
         let template = find_system_template("extract-downloads").unwrap();
         crate::orden::Config::from_string(template.yaml).unwrap();
-        assert!(template.yaml.contains("(?i)\\.7z\\.0*1$"));
+        assert!(template.yaml.contains("- archivefile"));
+        assert!(!template.yaml.contains("extension:"));
         assert!(template.yaml.contains("delete_original: true"));
 
         let automation = system_template_automation(template.id).unwrap();
@@ -1012,6 +1013,7 @@ mod tests {
         assert_eq!(rule.destination, "~/Downloads/Unpacked/");
         assert!(rule.delete_original);
         assert!(rule.archive_passwords.is_empty());
+        assert_eq!(rule.filter_steps[0].kind, "archivefile");
         assert!(rule.action_steps[0].value.contains("recursive: true"));
         assert!(rule.action_steps[0].value.contains("max_depth: 3"));
 

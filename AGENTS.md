@@ -54,7 +54,7 @@ Shelfy 是 Tauri (Rust + React) 桌面文件整理工具，当前后端 `src-tau
 - Portal 浮层的滚动容器必须有与浮层一致的 token 背景。菜单见 `ui/menu.tsx`，Select 见 `ui/select.tsx`，避免 macOS 深色模式露出系统白色轨道。
 - Orden Visual 是结构化编辑器：当前可选动作必须在 `OrdenStepParameterEditor.tsx` 提供对应字段组件；不能退回用 YAML textarea 代替常用参数。
 - 解压动作必须暴露 `dest/format/passwords/delete_original/on_conflict/rename_template/autodetect_folder`；压缩动作必须暴露单密码输入与显隐控制。
-- 标签、跳过标签、扩展名、MIME 等短值列表使用 `ui/tag-input.tsx`，支持回车/逗号添加和逐项删除；密码列表使用遮蔽显示，辅助功能文本不得泄露密码。
+- 标签、跳过标签、扩展名、MIME 等短值列表使用 `ui/tag-input.tsx`，支持回车/逗号添加和逐项删除；密码列表、密码输入与 7-Zip 运行日志按产品要求直接显示明文。
 - 修改 Visual 参数字段时同时核对 Rust `orden/actions/mod.rs` 或 `orden/filters/mod.rs` 的解析键，并保证序列化 YAML 仍可被后端读取。
 
 ## 验证

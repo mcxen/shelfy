@@ -33,8 +33,17 @@ impl ArchiveFormat {
         if configured != Self::Auto {
             return Ok(configured);
         }
-        if seven_zip_volume(path).is_some() {
-            return Ok(Self::SevenZip);
+        detect_archive_format(path)?.ok_or_else(|| {
+            format!(
+                "extract: cannot detect a supported archive format from file content: {}",
+                path.display()
+            )
+        })
+    }
+
+    fn detect_for_compress(path: &Path, configured: Self) -> Self {
+        if configured != Self::Auto {
+            return configured;
         }
         match path
             .extension()
@@ -43,22 +52,40 @@ impl ArchiveFormat {
             .to_ascii_lowercase()
             .as_str()
         {
-            "zip" => Ok(Self::Zip),
-            "7z" => Ok(Self::SevenZip),
-            "rar" => Ok(Self::Rar),
-            ext => Err(format!(
-                "extract: cannot auto-detect archive format from .{}",
-                ext
-            )),
+            "7z" => Self::SevenZip,
+            "rar" => Self::Rar,
+            _ => Self::Zip,
         }
     }
+}
 
-    fn default_for_compress(configured: Self) -> Self {
-        match configured {
-            Self::Auto => Self::Zip,
-            other => other,
-        }
+const ZIP_SIGNATURES: [[u8; 4]; 3] = [*b"PK\x03\x04", *b"PK\x05\x06", *b"PK\x07\x08"];
+const SEVEN_ZIP_SIGNATURE: &[u8] = b"7z\xBC\xAF\x27\x1C";
+const RAR4_SIGNATURE: &[u8] = b"Rar!\x1A\x07\x00";
+const RAR5_SIGNATURE: &[u8] = b"Rar!\x1A\x07\x01\x00";
+
+/// Detect supported archives from their file signature. Split 7z volumes are
+/// resolved to the first volume before its signature is read.
+pub(crate) fn detect_archive_format(path: &Path) -> Result<Option<ArchiveFormat>, String> {
+    let resolved = resolve_first_7z_volume(path)?;
+    let mut file = fs::File::open(&resolved).map_err(|error| error.to_string())?;
+    let mut header = [0u8; 8];
+    let read = file.read(&mut header).map_err(|error| error.to_string())?;
+    let header = &header[..read];
+
+    if ZIP_SIGNATURES
+        .iter()
+        .any(|signature| header.starts_with(signature))
+    {
+        return Ok(Some(ArchiveFormat::Zip));
     }
+    if header.starts_with(SEVEN_ZIP_SIGNATURE) {
+        return Ok(Some(ArchiveFormat::SevenZip));
+    }
+    if header.starts_with(RAR4_SIGNATURE) || header.starts_with(RAR5_SIGNATURE) {
+        return Ok(Some(ArchiveFormat::Rar));
+    }
+    Ok(None)
 }
 
 /// Extract an archive. ZIP is handled in process; 7z and RAR use an installed
@@ -360,14 +387,14 @@ impl Action for CompressArchive {
             .file_name()
             .map(|n| n.to_string_lossy().to_string())
             .ok_or("compress: source has no filename")?;
-        let format = ArchiveFormat::default_for_compress(self.format);
+        let dest_rendered = template::render(&self.dest, &res.dict())?;
+        let format = ArchiveFormat::detect_for_compress(Path::new(&dest_rendered), self.format);
         let ext = match format {
             ArchiveFormat::Zip => "zip",
             ArchiveFormat::SevenZip => "7z",
             ArchiveFormat::Rar => "7z",
             ArchiveFormat::Auto => unreachable!(),
         };
-        let dest_rendered = template::render(&self.dest, &res.dict())?;
         let mut dest = prepare_target_path(
             &format!("{}.{}", src_name, ext),
             &dest_rendered,
@@ -658,16 +685,7 @@ fn run_7z_command(
 }
 
 fn display_7z_args(args: &[String]) -> String {
-    args.iter()
-        .map(|arg| {
-            if arg.starts_with("-p") && arg.len() > 2 {
-                "-p********".to_string()
-            } else {
-                arg.clone()
-            }
-        })
-        .collect::<Vec<_>>()
-        .join(" ")
+    args.join(" ")
 }
 
 fn extract_with_7z(
@@ -774,16 +792,9 @@ fn archive_stem(path: &Path) -> Option<String> {
 
 fn is_nested_archive(path: &Path) -> bool {
     if let Some(volume) = seven_zip_volume(path) {
-        return volume.part == 1;
+        return volume.part == 1 && detect_archive_format(path).ok().flatten().is_some();
     }
-    matches!(
-        path.extension()
-            .and_then(|extension| extension.to_str())
-            .unwrap_or_default()
-            .to_ascii_lowercase()
-            .as_str(),
-        "zip" | "7z" | "rar"
-    )
+    detect_archive_format(path).ok().flatten().is_some()
 }
 
 fn collect_nested_archives(root: &Path) -> Result<Vec<PathBuf>, String> {
@@ -979,17 +990,43 @@ mod tests {
     fn detects_two_and_three_digit_7z_volumes() {
         let two = Path::new("bundle.7z.01");
         let three = Path::new("bundle.7Z.001");
-        assert_eq!(
-            ArchiveFormat::detect_for_extract(two, ArchiveFormat::Auto),
-            Ok(ArchiveFormat::SevenZip)
-        );
-        assert_eq!(
-            ArchiveFormat::detect_for_extract(three, ArchiveFormat::Auto),
-            Ok(ArchiveFormat::SevenZip)
-        );
         assert_eq!(archive_stem(two).as_deref(), Some("bundle"));
         assert_eq!(seven_zip_volume(two).unwrap().part, 1);
         assert_eq!(seven_zip_volume(three).unwrap().width, 3);
+    }
+
+    #[test]
+    fn detects_archive_formats_from_content_without_extensions() {
+        let root = temp_dir("content-detection");
+        fs::create_dir_all(&root).unwrap();
+        let payload = root.join("payload.txt");
+        let zip_without_extension = root.join("download");
+        fs::write(&payload, b"content").unwrap();
+        create_zip(&payload, &zip_without_extension, None).unwrap();
+
+        assert_eq!(
+            ArchiveFormat::detect_for_extract(&zip_without_extension, ArchiveFormat::Auto),
+            Ok(ArchiveFormat::Zip)
+        );
+        fs::write(root.join("misleading.zip"), b"not an archive").unwrap();
+        assert!(ArchiveFormat::detect_for_extract(
+            &root.join("misleading.zip"),
+            ArchiveFormat::Auto
+        )
+        .is_err());
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn auto_compress_format_uses_destination_name() {
+        assert_eq!(
+            ArchiveFormat::detect_for_compress(Path::new("output.7z"), ArchiveFormat::Auto),
+            ArchiveFormat::SevenZip
+        );
+        assert_eq!(
+            ArchiveFormat::detect_for_compress(Path::new("output"), ArchiveFormat::Auto),
+            ArchiveFormat::Zip
+        );
     }
 
     #[test]
@@ -1020,10 +1057,10 @@ mod tests {
     }
 
     #[test]
-    fn hides_7z_passwords_in_logs() {
+    fn shows_7z_passwords_in_logs() {
         assert_eq!(
             display_7z_args(&["t".into(), "-psecret".into(), "file.7z".into()]),
-            "t -p******** file.7z"
+            "t -psecret file.7z"
         );
     }
 

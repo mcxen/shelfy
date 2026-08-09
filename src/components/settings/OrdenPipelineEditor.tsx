@@ -59,6 +59,7 @@ type StepDefinition = {
 
 const FILTER_DEFINITIONS: StepDefinition[] = [
   { kind: "extension", label: "File type", hint: "Match extensions such as PDF or PNG", icon: FileType2, common: true },
+  { kind: "archivefile", label: "Archive", hint: "Detect ZIP, 7z, or RAR by file content", icon: Archive, common: true },
   { kind: "name", label: "File name", hint: "Match a name or wildcard pattern", icon: Type, common: true },
   { kind: "regex", label: "Pattern", hint: "Use a regular expression", icon: Regex, common: true },
   { kind: "size", label: "File size", hint: "Compare file or folder size", icon: Ruler, common: true },
@@ -123,10 +124,10 @@ const PRESETS: Record<string, string> = {
   symlink: "~/Documents/Shelfy Links/",
   hardlink: "~/Documents/Shelfy Links/",
   shell: 'cmd: "echo {path}"\nrun_in_simulation: false\nignore_errors: false',
-  extract: "dest: ~/Documents/Extracted/\nformat: zip\ndelete_original: false",
-  unarchive: "dest: ~/Documents/Extracted/\nformat: zip\ndelete_original: false",
-  compress: "dest: ~/Documents/Archives/{name}.zip\nformat: zip\ndelete_original: false",
-  archive: "dest: ~/Documents/Archives/{name}.zip\nformat: zip\ndelete_original: false",
+  extract: "dest: ~/Documents/Extracted/\nformat: auto\ndelete_original: false",
+  unarchive: "dest: ~/Documents/Extracted/\nformat: auto\ndelete_original: false",
+  compress: "dest: ~/Documents/Archives/{name}.zip\nformat: auto\ndelete_original: false",
+  archive: "dest: ~/Documents/Archives/{name}.zip\nformat: auto\ndelete_original: false",
 };
 
 interface OrdenPipelineEditorProps {

@@ -473,6 +473,7 @@
         "levels": { "info": "信息", "warn": "警告", "error": "错误", "debug": "调试" },
         "steps": {
           "extension": { "label": "文件类型", "hint": "按 PDF、PNG 等扩展名匹配" },
+          "archivefile": { "label": "压缩包", "hint": "按文件内容识别 ZIP、7z 或 RAR，不依赖扩展名" },
           "name": { "label": "文件名", "hint": "按名称或通配符匹配" },
           "regex": { "label": "表达式", "hint": "使用正则表达式匹配" },
           "size": { "label": "文件大小", "hint": "比较文件或文件夹大小" },

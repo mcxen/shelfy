@@ -1,6 +1,3 @@
-import { useState } from "react";
-import { Eye, EyeOff } from "lucide-react";
-import { Button } from "../ui/button";
 import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -9,7 +6,7 @@ import { TagInput } from "../ui/tag-input";
 
 type Value = string | boolean | number | string[];
 type Values = Record<string, Value>;
-type FieldType = "text" | "textarea" | "password" | "boolean" | "select" | "tags" | "number";
+type FieldType = "text" | "textarea" | "boolean" | "select" | "tags" | "number";
 type Field = { key: string; type: FieldType; options?: string[]; placeholder?: string; wide?: boolean; min?: number; max?: number; defaultValue?: Value; showWhen?: { key: string; value: Value } };
 
 const ACTION_FIELDS: Record<string, Field[]> = {
@@ -33,6 +30,7 @@ const ACTION_FIELDS: Record<string, Field[]> = {
 };
 
 const FILTER_FIELDS: Record<string, Field[]> = {
+  archivefile: [],
   extension: [{ key: "value", type: "tags", placeholder: "zip, 7z, rar", wide: true }],
   mimetype: [{ key: "value", type: "tags", placeholder: "application/pdf", wide: true }],
   size: [{ key: "value", type: "tags", placeholder: "> 10 MB", wide: true }],
@@ -58,8 +56,8 @@ function destinationFields(multiple = false): Field[] {
 
 function archiveFields(extract: boolean): Field[] {
   return [
-    { key: "dest", type: "text", wide: true }, { key: "format", type: "select", options: extract ? ["auto", "zip", "7z", "rar"] : ["zip", "7z", "rar"] },
-    { key: extract ? "passwords" : "password", type: extract ? "tags" : "password", wide: true },
+    { key: "dest", type: "text", wide: true }, { key: "format", type: "select", options: ["auto", "zip", "7z", "rar"] },
+    { key: extract ? "passwords" : "password", type: extract ? "tags" : "text", wide: true },
     { key: "delete_original", type: "boolean" },
     ...(extract ? [
       { key: "recursive", type: "boolean" } as Field,
@@ -129,7 +127,6 @@ export const supportsStepParameterEditor = (mode: "filter" | "action", kind: str
 
 export function OrdenStepParameterEditor({ mode, kind, value, onChange, label }: Props) {
   const fields = (mode === "action" ? ACTION_FIELDS : FILTER_FIELDS)[kind];
-  const [showPassword, setShowPassword] = useState(false);
   if (!fields) return null;
   const values = parseStepValue(kind, value);
   const set = (key: string, next: Value) => onChange(serialize({ ...values, [key]: next }));
@@ -145,9 +142,9 @@ export function OrdenStepParameterEditor({ mode, kind, value, onChange, label }:
       return <div key={field.key} className={field.wide ? "md:col-span-2" : undefined}>
         <Label htmlFor={id} className="mb-1 block text-xs text-muted-foreground">{label(field.key)}</Label>
         {field.type === "select" ? <Select value={String(current ?? field.options?.[0] ?? "")} onValueChange={(next) => set(field.key, next)}><SelectTrigger id={id}><SelectValue /></SelectTrigger><SelectContent>{field.options?.map((option) => <SelectItem key={option} value={option}>{label(option)}</SelectItem>)}</SelectContent></Select>
-          : field.type === "tags" ? <TagInput value={Array.isArray(current) ? current : current ? [String(current)] : []} onChange={(next) => set(field.key, next)} placeholder={field.placeholder} ariaLabel={label(field.key)} maskValues={field.key === "passwords"} />
+          : field.type === "tags" ? <TagInput value={Array.isArray(current) ? current : current ? [String(current)] : []} onChange={(next) => set(field.key, next)} placeholder={field.placeholder} ariaLabel={label(field.key)} />
           : field.type === "textarea" ? <textarea id={id} value={String(current ?? "")} onChange={(event) => set(field.key, event.target.value)} placeholder={field.placeholder} className="min-h-20 w-full resize-y rounded-md border border-input bg-card px-2.5 py-2 text-xs leading-5 outline-none focus:border-ring focus:ring-2 focus:ring-ring/20" />
-          : <div className="relative"><Input id={id} type={field.type === "number" ? "number" : field.type === "password" && !showPassword ? "password" : "text"} min={field.min} max={field.max} value={String(current ?? field.defaultValue ?? "")} onChange={(event) => set(field.key, field.type === "number" ? Number(event.target.value) : event.target.value)} placeholder={field.placeholder} className={field.type === "password" ? "pr-9" : undefined} />{field.type === "password" && <Button type="button" variant="ghost" size="icon-sm" onClick={() => setShowPassword((shown) => !shown)} className="absolute right-1 top-1/2 -translate-y-1/2" aria-label={showPassword ? label("hide_password") : label("show_password")}>{showPassword ? <EyeOff /> : <Eye />}</Button>}</div>}
+          : <Input id={id} type={field.type === "number" ? "number" : "text"} min={field.min} max={field.max} value={String(current ?? field.defaultValue ?? "")} onChange={(event) => set(field.key, field.type === "number" ? Number(event.target.value) : event.target.value)} placeholder={field.placeholder} />}
       </div>;
     })}
   </div>;
