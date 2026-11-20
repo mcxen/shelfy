@@ -124,8 +124,8 @@ const PRESETS: Record<string, string> = {
   symlink: "~/Documents/Shelfy Links/",
   hardlink: "~/Documents/Shelfy Links/",
   shell: 'cmd: "echo {path}"\nrun_in_simulation: false\nignore_errors: false',
-  extract: "dest: ~/Documents/Extracted/\nformat: auto\ndelete_original: false",
-  unarchive: "dest: ~/Documents/Extracted/\nformat: auto\ndelete_original: false",
+  extract: `dest: "{basedir}/"\nformat: auto\ndelete_original: true\nrecursive: true\nmax_depth: 3`,
+  unarchive: `dest: "{basedir}/"\nformat: auto\ndelete_original: true\nrecursive: true\nmax_depth: 3`,
   compress: "dest: ~/Documents/Archives/{name}.zip\nformat: auto\ndelete_original: false",
   archive: "dest: ~/Documents/Archives/{name}.zip\nformat: auto\ndelete_original: false",
 };
@@ -223,12 +223,9 @@ export function OrdenPipelineEditor({
         {items.map((definition) => {
           const Icon = definition.icon;
           return (
-            <MenuItem key={definition.kind} onClick={() => add(definition.kind, insertAt)} className="items-start py-2">
-              <Icon className="mt-0.5" />
-              <span className="min-w-0">
-                <span className="block font-medium">{translated(definition, "label")}</span>
-                <span className="block text-xs text-muted-foreground">{translated(definition, "hint")}</span>
-              </span>
+            <MenuItem key={definition.kind} onClick={() => add(definition.kind, insertAt)}>
+              <Icon />
+              {translated(definition, "label")}
             </MenuItem>
           );
         })}
@@ -241,18 +238,20 @@ export function OrdenPipelineEditor({
       <MenuTrigger
         render={
           compact ? (
-            <button
+            <Button
               type="button"
-              className="group flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-background text-muted-foreground shadow-sm transition hover:border-primary/50 hover:bg-primary hover:text-primary-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              variant="outline"
+              size="icon-sm"
+              className="size-6 shrink-0 rounded-full text-muted-foreground hover:border-primary/50 hover:bg-primary hover:text-primary-foreground"
               aria-label={mode === "filter" ? t("settings.orden.addFilter") : t("settings.orden.addAction")}
             >
               <Plus className="size-3" />
-            </button>
+            </Button>
           ) : (
-            <button type="button" className="flex min-h-28 w-32 shrink-0 snap-start flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-border bg-muted/10 p-3 text-xs font-medium text-muted-foreground transition hover:border-primary/40 hover:bg-primary/5 hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
+            <Button type="button" variant="outline" className="h-auto min-h-28 w-32 shrink-0 snap-start flex-col gap-2 border-dashed bg-muted/10 p-3 text-xs font-medium text-muted-foreground hover:border-primary/40 hover:bg-primary/5 hover:text-primary">
               <span className="flex size-8 items-center justify-center rounded-lg border border-current/20 bg-background"><Plus className="size-4" /></span>
               {mode === "filter" ? t("settings.orden.addFilter") : t("settings.orden.addAction")}
-            </button>
+            </Button>
           )
         }
       />
@@ -271,40 +270,28 @@ export function OrdenPipelineEditor({
 
   return (
     <div className="space-y-2.5">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <Label className="text-sm font-medium">
-            {mode === "filter" ? t("settings.orden.filterPipeline") : t("settings.orden.actionPipeline")}
-          </Label>
-          <p className="mt-0.5 text-xs text-muted-foreground">
-            {mode === "filter"
-              ? t("settings.orden.workflow.filterHelp", { defaultValue: "Add only the conditions this rule needs." })
-              : t("settings.orden.workflow.actionHelp", { defaultValue: "Actions run from top to bottom." })}
-          </p>
-        </div>
-        <div className="flex items-center gap-1">
-          <Button type="button" variant="ghost" size="icon-sm" onClick={() => scrollRail(-1)} disabled={steps.length < 2} aria-label={t("settings.orden.workflow.previousCard", { defaultValue: "Previous card" })}>
-            <ChevronLeft />
-          </Button>
-          <Button type="button" variant="ghost" size="icon-sm" onClick={() => scrollRail(1)} disabled={steps.length < 2} aria-label={t("settings.orden.workflow.nextCard", { defaultValue: "Next card" })}>
-            <ChevronRight />
-          </Button>
-          <Menu>
-            <MenuTrigger
-              render={
-                <Button type="button" variant="outline" size="sm">
-                  <Plus />
-                  {mode === "filter" ? t("settings.orden.addFilter") : t("settings.orden.addAction")}
-                </Button>
-              }
-            />
-            <MenuPopup className="w-72" align="end">
-              {renderLibraryGroup(true)}
-              <MenuSeparator />
-              {renderLibraryGroup(false)}
-            </MenuPopup>
-          </Menu>
-        </div>
+      <div className="flex items-center justify-end gap-1">
+        <Button type="button" variant="ghost" size="icon-sm" onClick={() => scrollRail(-1)} disabled={steps.length < 2} aria-label={t("settings.orden.workflow.previousCard", { defaultValue: "Previous card" })}>
+          <ChevronLeft />
+        </Button>
+        <Button type="button" variant="ghost" size="icon-sm" onClick={() => scrollRail(1)} disabled={steps.length < 2} aria-label={t("settings.orden.workflow.nextCard", { defaultValue: "Next card" })}>
+          <ChevronRight />
+        </Button>
+        <Menu>
+          <MenuTrigger
+            render={
+              <Button type="button" variant="outline" size="sm">
+                <Plus />
+                {mode === "filter" ? t("settings.orden.addFilter") : t("settings.orden.addAction")}
+              </Button>
+            }
+          />
+          <MenuPopup className="w-72" align="end">
+            {renderLibraryGroup(true)}
+            <MenuSeparator />
+            {renderLibraryGroup(false)}
+          </MenuPopup>
+        </Menu>
       </div>
 
       {steps.length === 0 && (
@@ -316,11 +303,6 @@ export function OrdenPipelineEditor({
             {mode === "filter"
               ? t("settings.orden.workflow.matchEverything", { defaultValue: "No conditions — match everything" })
               : t("settings.orden.noActionsConfigured")}
-          </p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {mode === "filter"
-              ? t("settings.orden.workflow.matchEverythingHelp", { defaultValue: "Add a condition to narrow down the files entering this flow." })
-              : t("settings.orden.workflow.noActionHelp", { defaultValue: "Add at least one action to complete this flow." })}
           </p>
         </div>
       )}
@@ -366,13 +348,14 @@ export function OrdenPipelineEditor({
                       setDropIndex(null);
                     }}
                   >
-                    <button
+                    <Button
                       type="button"
+                      variant="outline"
                       onClick={() => setSelectedId(step.id)}
-                      className={`group min-h-28 w-40 rounded-lg border p-3 text-left shadow-sm transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                      className={`group h-auto min-h-28 w-40 flex-col items-start p-3 text-left font-normal shadow-sm ${
                         selected
                           ? "border-primary/55 bg-primary/8 ring-1 ring-primary/20"
-                          : "border-border bg-card hover:border-primary/30 hover:bg-muted/20"
+                          : "bg-card hover:border-primary/30 hover:bg-muted/20"
                       }`}
                       aria-pressed={selected}
                     >
@@ -392,7 +375,7 @@ export function OrdenPipelineEditor({
                       {step.inverted && mode === "filter" && (
                         <Badge variant="outline" className="mt-2 h-5 px-1.5 text-[10px]">{t("settings.orden.workflow.excludeBadge")}</Badge>
                       )}
-                    </button>
+                    </Button>
                   </div>
                 </Fragment>
               );
@@ -423,7 +406,6 @@ export function OrdenPipelineEditor({
                 </div>
               </div>
               <div className="space-y-2 px-2.5 py-2.5">
-                <p className="text-xs text-muted-foreground">{translated(selectedDefinition, "hint")}</p>
                 <OrdenStepParameterEditor mode={mode} kind={selectedStep.kind} value={selectedStep.value} onChange={(value) => update(selectedStep.id, { value })} label={(key) => t(`settings.orden.workflow.params.${key}`, { defaultValue: key.replace(/_/g, " ") })} />
                 {!supportsStepParameterEditor(mode, selectedStep.kind) && (
                   <textarea value={selectedStep.value} onChange={(event) => update(selectedStep.id, { value: event.target.value })} placeholder={t("settings.orden.pipelineValuePlaceholder")} className="min-h-16 w-full resize-y rounded-md border border-input bg-card px-2.5 py-2 font-mono text-xs leading-5 text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20" aria-label={`${translated(selectedDefinition, "label")} · ${t("settings.orden.pipelineValue")}`} />

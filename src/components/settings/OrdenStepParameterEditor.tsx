@@ -1,8 +1,10 @@
 import { Checkbox } from "../ui/checkbox";
+import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { TagInput } from "../ui/tag-input";
+import { isOriginalFolderDest, ORIGINAL_FOLDER_DEST } from "./utils";
 
 type Value = string | boolean | number | string[];
 type Values = Record<string, Value>;
@@ -56,7 +58,7 @@ function destinationFields(multiple = false): Field[] {
 
 function archiveFields(extract: boolean): Field[] {
   return [
-    { key: "dest", type: "text", wide: true }, { key: "format", type: "select", options: ["auto", "zip", "7z", "rar"] },
+    { key: "dest", type: "text", wide: true, placeholder: extract ? ORIGINAL_FOLDER_DEST : "~/Documents/Archives/{name}.zip", defaultValue: extract ? ORIGINAL_FOLDER_DEST : "" }, { key: "format", type: "select", options: ["auto", "zip", "7z", "rar"] },
     { key: extract ? "passwords" : "password", type: extract ? "tags" : "text", wide: true },
     { key: "delete_original", type: "boolean" },
     ...(extract ? [
@@ -140,7 +142,14 @@ export function OrdenStepParameterEditor({ mode, kind, value, onChange, label }:
       const current = values[field.key];
       if (field.type === "boolean") return <Label key={field.key} className="flex min-h-9 items-center gap-2 rounded-md border border-border bg-card px-3 text-xs"><Checkbox checked={current === true} onCheckedChange={(checked) => set(field.key, checked === true)} />{label(field.key)}</Label>;
       return <div key={field.key} className={field.wide ? "md:col-span-2" : undefined}>
-        <Label htmlFor={id} className="mb-1 block text-xs text-muted-foreground">{label(field.key)}</Label>
+        <div className="mb-1 flex items-center justify-between gap-2">
+          <Label htmlFor={id} className="block text-xs text-muted-foreground">{label(field.key)}</Label>
+          {field.key === "dest" && (kind === "extract" || kind === "unarchive") && (
+            <Button type="button" variant={isOriginalFolderDest(String(current ?? "")) ? "secondary" : "ghost"} size="sm" className="h-6 px-2 text-[10px]" onClick={() => set(field.key, ORIGINAL_FOLDER_DEST)}>
+              {label("dest_original")}
+            </Button>
+          )}
+        </div>
         {field.type === "select" ? <Select value={String(current ?? field.options?.[0] ?? "")} onValueChange={(next) => set(field.key, next)}><SelectTrigger id={id}><SelectValue /></SelectTrigger><SelectContent>{field.options?.map((option) => <SelectItem key={option} value={option}>{label(option)}</SelectItem>)}</SelectContent></Select>
           : field.type === "tags" ? <TagInput value={Array.isArray(current) ? current : current ? [String(current)] : []} onChange={(next) => set(field.key, next)} placeholder={field.placeholder} ariaLabel={label(field.key)} />
           : field.type === "textarea" ? <textarea id={id} value={String(current ?? "")} onChange={(event) => set(field.key, event.target.value)} placeholder={field.placeholder} className="min-h-20 w-full resize-y rounded-md border border-input bg-card px-2.5 py-2 text-xs leading-5 outline-none focus:border-ring focus:ring-2 focus:ring-ring/20" />

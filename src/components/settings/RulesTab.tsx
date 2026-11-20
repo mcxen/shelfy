@@ -5,7 +5,7 @@ import { Rule, WatchedFolder } from "../../store/useAppStore";
 import { AnimatedIcon } from "../ui/animated-icon";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "../ui/card";
 import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -155,7 +155,6 @@ export function RulesTab({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold">{t("settings.rules.title")}</h2>
-          <p className="text-xs text-muted-foreground">{t("settings.rules.description")}</p>
         </div>
         <Button
           type="button"
@@ -172,7 +171,6 @@ export function RulesTab({
         <div className="flex items-center justify-between gap-3">
           <div>
             <h3 className="text-sm font-semibold">{t("settings.folders.title")}</h3>
-            <p className="text-xs text-muted-foreground">{t("settings.folders.modeDesc")}</p>
           </div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -255,13 +253,12 @@ export function RulesTab({
         <DialogPopup className="max-h-[calc(100vh-2rem)] max-w-3xl">
           <DialogHeader className="border-b border-border bg-muted/20">
             <DialogTitle>{editingRule.id ? t("settings.rules.updateTitle") : t("settings.rules.createTitle")}</DialogTitle>
-            <DialogDescription>{t("settings.rules.editorDescription")}</DialogDescription>
+            <DialogDescription className="sr-only">{t("settings.rules.editorDescription")}</DialogDescription>
           </DialogHeader>
           <DialogPanel className="space-y-3 pt-4">
             <section className="border-b border-border/70 pb-3">
               <CardHeader className="px-0 py-0 pb-2">
-                <CardTitle className="text-sm">1. {t("settings.rules.basicSettings")}</CardTitle>
-                <CardDescription className="text-xs">{t("settings.rules.basicSettingsDesc")}</CardDescription>
+                <CardTitle className="text-sm">{t("settings.rules.basicSettings")}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3 p-0 md:grid-cols-[minmax(0,1fr)_8rem_auto]">
                 <div>
@@ -281,8 +278,7 @@ export function RulesTab({
 
             <section className="border-b border-border/70 pb-3">
               <CardHeader className="px-0 py-0 pb-2">
-                <CardTitle className="text-sm">2. {t("settings.rules.matchSettings")}</CardTitle>
-                <CardDescription className="text-xs">{t("settings.rules.matchSettingsDesc")}</CardDescription>
+                <CardTitle className="text-sm">{t("settings.rules.matchSettings")}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3 p-0 md:grid-cols-2">
                 <div className="md:col-span-2">
@@ -327,7 +323,6 @@ export function RulesTab({
                     onChange={(event) => setEditingRule({ ...editingRule, extensions: event.target.value.split(",").map((extension) => extension.trim()) })}
                     placeholder="pdf, docx, xlsx"
                   />
-                  <p className="mt-1 text-[11px] text-muted-foreground">{t("settings.rules.extensionsHint")}</p>
                 </div>
                 <div>
                   <Label htmlFor="rule-pattern" className="mb-1 block text-xs text-muted-foreground">{t("settings.rules.pattern")}</Label>
@@ -338,15 +333,13 @@ export function RulesTab({
                     onChange={(event) => setEditingRule({ ...editingRule, pattern: event.target.value.trim() === "" ? null : event.target.value })}
                     placeholder="(?i)report.*\\.pdf"
                   />
-                  <p className="mt-1 text-[11px] text-muted-foreground">{t("settings.rules.patternHint")}</p>
                 </div>
               </CardContent>
             </section>
 
             <section>
               <CardHeader className="px-0 py-0 pb-2">
-                <CardTitle className="text-sm">3. {t("settings.rules.actionSettings")}</CardTitle>
-                <CardDescription className="text-xs">{t("settings.rules.actionSettingsDesc")}</CardDescription>
+                <CardTitle className="text-sm">{t("settings.rules.actionSettings")}</CardTitle>
               </CardHeader>
               <CardContent className="grid gap-3 p-0 md:grid-cols-[12rem_minmax(0,1fr)]">
                 <div>
@@ -372,7 +365,6 @@ export function RulesTab({
                         <TooltipContent>{t("settings.rules.chooseDestination")}</TooltipContent>
                       </Tooltip>
                     </div>
-                    <p className="mt-1 text-[11px] text-muted-foreground">{t("settings.rules.destinationHint")}</p>
                   </div>
                 )}
               </CardContent>
@@ -398,7 +390,6 @@ export function RulesTab({
         <CardHeader className="flex-row items-center justify-between gap-3 border-b border-border">
           <div>
             <CardTitle className="text-sm">{t("settings.rules.ruleList")}</CardTitle>
-            <CardDescription className="text-xs">{t("settings.rules.ruleListDesc")}</CardDescription>
           </div>
           <Badge variant="secondary">{t("settings.rules.ruleCount", { count: rules.length })}</Badge>
         </CardHeader>

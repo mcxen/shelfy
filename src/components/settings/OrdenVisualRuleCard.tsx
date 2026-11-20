@@ -8,14 +8,13 @@ import {
   Files,
   Filter,
   FolderOpen,
-  Route,
   Trash2,
   WandSparkles,
 } from "lucide-react";
 import { OrdenVisualRule } from "../../store/useAppStore";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "../ui/card";
+import { Card, CardContent, CardHeader } from "../ui/card";
 import { Checkbox } from "../ui/checkbox";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -52,28 +51,17 @@ export function OrdenVisualRuleCard({
     if (sourceIndex >= visibleSources.length) setSourceIndex(Math.max(visibleSources.length - 1, 0));
   }, [sourceIndex, visibleSources.length]);
 
-  const filterCount = rule.filterSteps?.length || 0;
-  const actionCount = rule.actionSteps?.length || 0;
-
   return (
     <Card className="overflow-hidden">
-      <CardHeader className="flex-row items-center justify-between gap-3 border-b border-border bg-muted/20 px-3 py-2.5">
+      <CardHeader className="flex-row items-center justify-between gap-3 border-b border-border bg-muted/20 px-3 py-2">
         <div className="flex min-w-0 items-center gap-3">
-          <div className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-sm font-semibold text-primary">
+          <div className="flex size-8 shrink-0 items-center justify-center rounded-lg border border-primary/20 bg-primary/10 text-sm font-semibold text-primary">
             {index + 1}
           </div>
-          <div className="min-w-0">
-            <CardTitle className="truncate">{rule.name || t("settings.orden.untitledRule")}</CardTitle>
-            <CardDescription className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs">
-              <span>{t("settings.orden.workflow.cardSummary", { defaultValue: "{{sources}} sources · {{filters}} conditions · {{actions}} actions", sources: sources.length || 1, filters: filterCount, actions: actionCount })}</span>
-            </CardDescription>
-          </div>
+          <Input id={fieldId("name")} value={rule.name} onChange={(event) => onUpdate(rule.id, { name: event.target.value })} placeholder={t("settings.orden.untitledRule")} className="h-8 border-0 bg-transparent px-0 text-sm font-semibold shadow-none focus-visible:ring-0" aria-label={t("settings.orden.name")} />
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Label className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Switch checked={rule.enabled} onCheckedChange={(checked) => onUpdate(rule.id, { enabled: checked })} aria-label={t("settings.orden.toggleRule", { name: rule.name })} />
-            <span className="hidden sm:inline">{rule.enabled ? t("settings.orden.enabled") : t("settings.orden.stopped")}</span>
-          </Label>
+          <Switch checked={rule.enabled} onCheckedChange={(checked) => onUpdate(rule.id, { enabled: checked })} aria-label={t("settings.orden.toggleRule", { name: rule.name })} />
           <Button type="button" onClick={() => onRemove(rule.id)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.deleteRule", { name: rule.name })} className="text-destructive hover:bg-destructive/10 hover:text-destructive">
             <Trash2 />
           </Button>
@@ -81,45 +69,13 @@ export function OrdenVisualRuleCard({
       </CardHeader>
 
       <CardContent className="space-y-3 px-3 pt-3 pb-3">
-        <div className="grid gap-2.5 border-b border-border/70 pb-3 md:grid-cols-2 xl:grid-cols-[minmax(0,1.2fr)_minmax(9rem,.55fr)_minmax(0,.8fr)]">
-          <div>
-            <Label htmlFor={fieldId("name")} className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.name")}</Label>
-            <Input id={fieldId("name")} value={rule.name} onChange={(event) => onUpdate(rule.id, { name: event.target.value })} />
-          </div>
-          <div>
-            <Label htmlFor={fieldId("targets")} className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.targets")}</Label>
-            <Select value={rule.targets} onValueChange={(value) => onUpdate(rule.id, { targets: value })}>
-              <SelectTrigger id={fieldId("targets")}><SelectValue /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="files">{t("settings.orden.targetFiles")}</SelectItem>
-                <SelectItem value="dirs">{t("settings.orden.targetDirs")}</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="md:col-span-2 xl:col-span-1">
-            <Label htmlFor={fieldId("tags")} className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.tags")}</Label>
-            <TagInput value={rule.tags.split(",").map((tag) => tag.trim()).filter(Boolean)} onChange={(tags) => onUpdate(rule.id, { tags: tags.join(", ") })} placeholder={t("settings.orden.ruleTagPlaceholder")} ariaLabel={t("settings.orden.tags")} />
-          </div>
-        </div>
-
-        <div className="flex items-center gap-2 px-1">
-          <Route className="size-4 text-primary" />
-          <div>
-            <div className="text-sm font-semibold">{t("settings.orden.workflow.flowTitle", { defaultValue: "Workflow cards" })}</div>
-            <div className="text-xs text-muted-foreground">{t("settings.orden.workflow.flowDescription", { defaultValue: "Choose a card to inspect it. Cards run from source to action." })}</div>
-          </div>
-        </div>
-
         <div className="grid gap-3 min-[1120px]:grid-cols-[minmax(15rem,.72fr)_minmax(20rem,1fr)_minmax(20rem,1fr)]">
           <section className="relative min-w-0 rounded-lg border border-border bg-card p-2.5">
             <div className="pointer-events-none absolute -right-6 top-1/2 z-10 hidden -translate-y-1/2 items-center min-[1120px]:flex" aria-hidden="true"><span className="h-px w-3 bg-border" /><span className="flex size-5 items-center justify-center rounded-full border border-border bg-background text-muted-foreground"><ArrowRight className="size-3" /></span></div>
             <div className="mb-2.5 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <div className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary"><Files className="size-3.5" /></div>
-                <div>
-                  <h4 className="text-sm font-semibold">{t("settings.orden.workflow.source", { defaultValue: "Source" })}</h4>
-                  <p className="text-[11px] text-muted-foreground">{t("settings.orden.workflow.sourceHelp", { defaultValue: "Files entering this flow" })}</p>
-                </div>
+                <h4 className="text-sm font-semibold">{t("settings.orden.workflow.source", { defaultValue: "Source" })}</h4>
               </div>
               <div className="flex items-center gap-0.5">
                 <Button type="button" variant="ghost" size="icon-sm" onClick={() => setSourceIndex((current) => Math.max(0, current - 1))} disabled={sourceIndex === 0} aria-label={t("settings.orden.workflow.previousCard", { defaultValue: "Previous card" })}><ChevronLeft /></Button>
@@ -128,19 +84,35 @@ export function OrdenVisualRuleCard({
               </div>
             </div>
 
-            <button type="button" onClick={() => setSourceEditing((current) => !current)} className={`w-full rounded-lg border p-2.5 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${sourceEditing ? "border-primary/55 bg-primary/8 ring-1 ring-primary/20" : "border-border bg-background hover:border-primary/30"}`} aria-expanded={sourceEditing}>
-              <div className="flex items-start justify-between gap-2">
+            <Button type="button" variant="outline" onClick={() => setSourceEditing((current) => !current)} className={`h-auto w-full flex-col items-start p-2.5 text-left font-normal ${sourceEditing ? "border-primary/55 bg-primary/8 ring-1 ring-primary/20" : "bg-background hover:border-primary/30"}`} aria-expanded={sourceEditing}>
+              <div className="flex w-full items-start justify-between gap-2">
                 <div className="flex size-8 items-center justify-center rounded-lg bg-primary text-primary-foreground"><FolderOpen className="size-4" /></div>
                 <Badge variant="outline" className="text-[10px]">{rule.targets === "dirs" ? t("settings.orden.targetDirs") : t("settings.orden.targetFiles")}</Badge>
               </div>
-              <div className="mt-2 break-all text-sm font-semibold leading-tight">{visibleSources[sourceIndex]}</div>
-              <div className="mt-1 text-xs text-muted-foreground">{rule.subfolders ? t("settings.orden.subfolders") : t("settings.orden.workflow.currentFolderOnly", { defaultValue: "Current folder only" })}</div>
-            </button>
+              <div className="mt-2 w-full break-all text-sm font-semibold leading-tight">{visibleSources[sourceIndex]}</div>
+              <div className="mt-1 text-xs font-normal text-muted-foreground">{rule.subfolders ? t("settings.orden.subfolders") : t("settings.orden.workflow.currentFolderOnly", { defaultValue: "Current folder only" })}</div>
+            </Button>
 
             {sourceEditing && (
               <div className="mt-2.5 space-y-2 rounded-lg border border-border/80 bg-muted/15 p-2.5">
                 <Label htmlFor={fieldId("locations")} className="text-xs text-muted-foreground">{t("settings.orden.locations")}</Label>
                 <textarea id={fieldId("locations")} value={rule.location} onChange={(event) => onUpdate(rule.id, { location: event.target.value })} placeholder="~/Downloads" className="min-h-20 w-full resize-y rounded-md border border-input bg-background px-2.5 py-2 text-xs leading-5 text-foreground outline-none focus:border-ring focus:ring-2 focus:ring-ring/20" />
+                <div className="grid gap-2 sm:grid-cols-2">
+                  <div>
+                    <Label htmlFor={fieldId("targets")} className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.targets")}</Label>
+                    <Select value={rule.targets} onValueChange={(value) => onUpdate(rule.id, { targets: value })}>
+                      <SelectTrigger id={fieldId("targets")}><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="files">{t("settings.orden.targetFiles")}</SelectItem>
+                        <SelectItem value="dirs">{t("settings.orden.targetDirs")}</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="mb-1 block text-xs text-muted-foreground">{t("settings.orden.tags")}</Label>
+                    <TagInput value={rule.tags.split(",").map((tag) => tag.trim()).filter(Boolean)} onChange={(tags) => onUpdate(rule.id, { tags: tags.join(", ") })} placeholder={t("settings.orden.ruleTagPlaceholder")} ariaLabel={t("settings.orden.tags")} />
+                  </div>
+                </div>
                 <Label className="flex items-center gap-2 text-xs text-muted-foreground"><Checkbox checked={rule.subfolders} onCheckedChange={(checked) => onUpdate(rule.id, { subfolders: checked === true })} />{t("settings.orden.subfolders")}</Label>
                 <div className="flex flex-wrap gap-1.5">
                   <Button type="button" onClick={() => onChooseLocations(rule.id, false)} variant="outline" size="sm"><FileCheck2 />{t("settings.orden.chooseFiles")}</Button>
@@ -155,10 +127,7 @@ export function OrdenVisualRuleCard({
             <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <div className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary"><Filter className="size-3.5" /></div>
-                <div>
-                  <h4 className="text-sm font-semibold">{t("settings.orden.workflow.conditions", { defaultValue: "Conditions" })}</h4>
-                  <p className="text-[11px] text-muted-foreground">{t("settings.orden.workflow.conditionsHelp", { defaultValue: "Which items may continue" })}</p>
-                </div>
+                <h4 className="text-sm font-semibold">{t("settings.orden.workflow.conditions", { defaultValue: "Conditions" })}</h4>
               </div>
               <div className="flex rounded-lg border border-border bg-muted/20 p-0.5" aria-label={t("settings.orden.filterMode")}>
                 {(["all", "any", "none"] as const).map((mode) => (
@@ -174,10 +143,7 @@ export function OrdenVisualRuleCard({
           <section className="min-w-0 rounded-lg border border-border bg-card p-2.5">
             <div className="mb-2.5 flex items-center gap-2">
               <div className="flex size-7 items-center justify-center rounded-md bg-primary/10 text-primary"><WandSparkles className="size-3.5" /></div>
-              <div>
-                <h4 className="text-sm font-semibold">{t("settings.orden.workflow.actions", { defaultValue: "Actions" })}</h4>
-                <p className="text-[11px] text-muted-foreground">{t("settings.orden.workflow.actionsHelp", { defaultValue: "What happens, in order" })}</p>
-              </div>
+              <h4 className="text-sm font-semibold">{t("settings.orden.workflow.actions", { defaultValue: "Actions" })}</h4>
             </div>
             <OrdenPipelineEditor mode="action" steps={rule.actionSteps || []} onChange={(actionSteps) => onUpdate(rule.id, { actionSteps })} onChooseDestination={(stepId) => onChooseDestinations(rule.id, stepId)} />
           </section>

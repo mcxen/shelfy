@@ -8,6 +8,7 @@ Shelfy is a quiet cross-platform backup and file organizer. It supports document
 
 - Component baseline: coss/shadcn-style React components in `src/components/ui/*`.
 - Native-looking controls are not allowed in product screens. Buttons, selects, switches, checkboxes, sliders, labels, badges, cards, and separators must come from the local shadcn component layer.
+- Product screens must not use HTML `<button>`, `<select>`, `<details>`, or `<summary>`. Action triggers use `src/components/ui/button` (`Button`). Choice lists use `src/components/ui/select`. Overlay actions compose with `render={<Button ... />}` on Menu/Dialog close triggers. The Button primitive may render a native button internally; callers must not.
 - Styling uses CSS variables in `src/index.css` and Tailwind utility classes. No component may hard-code a one-off visual system.
 - Cards are limited to repeated items, grouped controls, and toasts. Page sections use plain layout bands and spacing.
 
@@ -42,6 +43,7 @@ Shelfy is a quiet cross-platform backup and file organizer. It supports document
 - Focus states use `ring` tokens from shadcn variables.
 - Scrollable product surfaces use the token-based thin scrollbar from `src/index.css`: transparent track, rounded muted thumb, primary hover, and ring active state. Compact horizontal navigation and step rails may hide the thumb while preserving wheel, trackpad, and keyboard scrolling.
 - Icon-only controls use the local shadcn/Radix tooltip component, never browser-native `title` tooltips.
+- Expand/collapse, card selection, table-name openers, pipeline step cards, and tag remove controls are `Button` variants, never raw `<button>` or `<details>`/`<summary>`.
 - Folder and destination paths can be typed or selected with the platform dialog.
 - Rule editing supports priority, extension matching, optional regex pattern, destination, action, target folder scope, and enabled state.
 - Scheduler editing supports fixed daily times, 5-field cron expressions, Windows/macOS system keepalive install/remove, and scheduler log review.

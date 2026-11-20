@@ -2,6 +2,7 @@ import {
   AppSettings,
   OrdenRunResult,
   OrdenVisualConfig,
+  OrdenVisualRule,
   OrdenVisualStep,
   ScheduleSettings,
 } from "../../store/useAppStore";
@@ -102,54 +103,50 @@ export function defaultMcpDraft(): McpDraft {
   };
 }
 
+export const ORIGINAL_FOLDER_DEST = "{basedir}/";
+
 export function defaultOrdenVisualConfig(): OrdenVisualConfig {
   return {
-    rules: [
-      {
-        id: `rule-${Date.now()}`,
-        name: "Back up PDF documents",
-        enabled: true,
-        targets: "files",
-        location: "~/Downloads",
-        subfolders: true,
-        extensions: "pdf",
-        filterMode: "all",
-        tags: "backup",
-        action: "copy",
-        destination: "~/Documents/Shelfy Backups/PDF/",
-        archiveFormat: "auto",
-        archivePassword: "",
-        archivePasswords: "",
-        deleteOriginal: false,
-        onConflict: "rename_new",
-        filterSteps: [
-          {
-            id: `filter-${Date.now()}`,
-            kind: "extension",
-            value: "[pdf]",
-            inverted: false,
-          },
-        ],
-        actionSteps: [
-          {
-            id: `action-${Date.now()}`,
-            kind: "copy",
-            value: "~/Documents/Shelfy Backups/PDF/",
-            inverted: false,
-          },
-        ],
-      },
-    ],
+    rules: [],
+  };
+}
+
+export function createBlankOrdenVisualRule(name?: string): OrdenVisualRule {
+  const stamp = Date.now();
+  return {
+    id: `rule-${stamp}-${Math.random().toString(36).slice(2, 7)}`,
+    name: name || "New rule",
+    enabled: true,
+    targets: "files",
+    location: "~/Downloads",
+    subfolders: false,
+    extensions: "",
+    filterMode: "all",
+    tags: "",
+    action: "move",
+    destination: "",
+    archiveFormat: "auto",
+    archivePassword: "",
+    archivePasswords: "",
+    deleteOriginal: false,
+    onConflict: "rename_new",
+    filterSteps: [],
+    actionSteps: [],
   };
 }
 
 export function yamlQuote(value: string): string {
   const trimmed = value.trim();
   if (!trimmed) return '""';
-  if (/^[A-Za-z0-9_./~:@{} -]+$/.test(trimmed) && !trimmed.includes("#")) {
-    return trimmed;
+  if (/^[{[]/.test(trimmed) || trimmed.includes("#") || !/^[A-Za-z0-9_./~:@{} -]+$/.test(trimmed)) {
+    return JSON.stringify(trimmed);
   }
-  return JSON.stringify(trimmed);
+  return trimmed;
+}
+
+export function isOriginalFolderDest(value: string): boolean {
+  const dest = value.trim().replace(/['"]/g, "");
+  return dest === ORIGINAL_FOLDER_DEST || dest === "{basedir}" || dest === "{location}/" || dest === "{location}";
 }
 
 export function listFromCsv(value: string): string[] {
@@ -207,9 +204,11 @@ export function buildOrdenPreviewRows(result: OrdenRunResult | null) {
 }
 
 export function visualToOrdenYaml(config: OrdenVisualConfig): string {
+  if (!config.rules || config.rules.length === 0) {
+    return "rules: []\n";
+  }
   const lines = ["rules:"];
-  const rules = config.rules.length > 0 ? config.rules : defaultOrdenVisualConfig().rules;
-  rules.forEach((rule) => {
+  config.rules.forEach((rule) => {
     lines.push(`  - name: ${yamlQuote(rule.name || "Untitled rule")}`);
     if (!rule.enabled) lines.push("    enabled: false");
     lines.push(`    targets: ${rule.targets || "files"}`);

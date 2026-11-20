@@ -98,6 +98,14 @@ orden/
 
 GUI 的手动运行走 `src-tauri/src/commands/orden.rs`，耗时工作交给 `src-tauri/src/orden_runtime.rs`。运行时维护最多 256 个任务状态，前端通过 `orden_task_status_cmd` 轮询，避免阻塞 Tauri command 线程。模拟请求会向 walker 下传扫描预算，因此会在读取目录期间提前停止，而不是先全量收集路径再截断结果。
 
+Tauri commands 集中提供完整的 Orden 接口：
+- 配置管理：`orden_list_cmd`、`orden_load_cmd`、`orden_save_cmd`、`orden_rename_cmd`、`orden_duplicate_cmd`、`orden_delete_cmd`、`orden_check_cmd`、`orden_visual_from_yaml_cmd`
+- 运行与轮询：`orden_run_cmd`、`orden_task_status_cmd`、`orden_run_job_cmd`
+- 模板中心：`orden_template_list_cmd`、`orden_template_load_cmd`、`orden_template_save_cmd`、`orden_template_delete_cmd`
+- 审计与任务：`orden_history_cmd`、`orden_delete_history_cmd`、`orden_clear_history_cmd`、`orden_jobs_cmd`、`orden_save_job_cmd`、`orden_delete_job_cmd`
+
+Orden 纯净启动策略：系统启动与进入配置中心时保持完全干净的状态，绝不自动创建或注入示例、测试配置或占位方案。在没有用户配置时，前台保持空状态展示；点击新建时提供纯净的空白规则（无任意特定路径或预填操作），杜绝产生残留垃圾数据。
+
 Orden 配置名会规范化后同时作为 SQLite `orden_configs.name` 和 `<data_dir>/orden/<name>.yaml` 的文件名；支持 Unicode 字母与数字（包括中文）以及 `-`、`_`，并拒绝路径分隔符、`..` 和其他不安全字符。保存、读取、删除共用同一规范化逻辑，`.yaml` / `.yml` 扩展名不区分大小写。
 
 MCP 操作指南由 `src-tauri/src/mcp.rs::help_text` 统一提供：`shelfy --mcp --help`、`shelfy --cli mcp --help` 打印指南后退出，Settings → MCP 的“操作指南”通过 `mcp_help_cmd` 展示同一内容。指南覆盖启动配置、读写工具边界、Orden 多规则模型、任务调度与先模拟后运行的安全流程。`shelfy_save_orden_job` 单独写入任务表；调度不嵌入规则 YAML。“每隔 1 小时”使用 `mode=interval, interval_minutes=60`，而 `0 * * * *` 表示每个整点。
@@ -116,7 +124,7 @@ MCP 操作指南由 `src-tauri/src/mcp.rs::help_text` 统一提供：`shelfy --m
 
 自动运行可启用 `require_confirmation`。启用后，定时或 monitor 触发只以 simulate 模式完成规则扫描和动作预检，并把最新匹配数、错误数、日志与扫描时间保存到 `orden_jobs`；任务列表允许查看预检快照，用户通过确认 Dialog 手动执行时才以真实模式重新扫描并运行，成功后清空待确认状态。`extract` 的预检不是浅层模拟：ZIP 会读取全部条目、校验 CRC 并试配候选密码，7z/RAR 会执行 `7z t` 试配密码；预检不创建目标目录、不解压且不删除源包。
 
-系统模板 `watch-extract-confirm` 提供该流程的可视化起点：规则 locations 是用户选择的源目录，extract `dest` 是新目录，`passwords` 是可维护且遮蔽显示的密码本，`delete_original=true` 仅在真实解压成功后生效；套用模板会同时创建 `monitor + require_confirmation` 自动运行。收到 `.7z.02/.002` 等任意后续卷时，extract 会按相同编号宽度定位 `.01/.001` 首卷，首卷缺失或卷号不连续时不删除任何卷。模板默认 `recursive=true, max_depth=3`，会继续处理本次解压新产生的内部 ZIP/7z/RAR，每层解压到内部压缩包所在目录的同名文件夹。递归不跟随符号链接，同一路径仅处理一次，总量最多 1000 个，层数限制为 1–10；达到限制时保留剩余压缩包并写 warn。修改规则源目录时，任务的 `watch_paths` 必须同步修改，二者当前不做隐式联动。
+系统模板 `watch-extract-confirm` 是默认的监控解压方案：locations 为监控目录，extract `dest` 默认为 `{basedir}/`（原始文件夹），`recursive=true, max_depth=3`，`delete_original=true` 仅在真实解压成功后生效。套用模板会创建 `monitor` 自动运行（默认不要求确认）。保存配置时，同名 monitor 任务的 `watch_paths` 会与规则 locations 同步。收到 `.7z.02/.002` 等任意后续卷时，extract 会按相同编号宽度定位 `.01/.001` 首卷，首卷缺失或卷号不连续时不删除任何卷。递归解压继续处理本次新产生的内部 ZIP/7z/RAR，每层解压到内部压缩包所在目录的同名文件夹；不跟随符号链接，同一路径仅处理一次，总量最多 1000 个，层数限制为 1–10；达到限制时保留剩余压缩包并写 warn。
 
 后台 LaunchAgent/keepalive 使用 `--autostart` 唤醒应用。单实例回调必须识别该参数并保持窗口隐藏，只有用户主动再次打开应用或点击界面入口时才显示 Settings。
 
@@ -194,7 +202,7 @@ Orden 动作与运行过程的展示统一通过 `src/lib/ordenI18n.ts` 映射 `
 
 ### UI 基础设施与滚动条
 
-`docs/UI_SPEC.md` 是视觉与交互规范，`src/index.css` 是 token 和全局实现。明暗主题均通过 CSS variables 驱动，业务组件不得硬编码主题颜色。
+`docs/UI_SPEC.md` 是视觉与交互规范，`src/index.css` 是 token 和全局实现。明暗主题均通过 CSS variables 驱动，业务组件不得硬编码主题颜色。产品界面禁止使用 HTML `<button>` / `<select>` / `<details>` / `<summary>`；按钮走 `ui/button`，选择走 `ui/select`，菜单和 Dialog 关闭通过 `render={<Button />}` 组合。
 
 所有可滚动产品 surface 使用全局 8px 主题化滚动条：
 

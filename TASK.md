@@ -62,11 +62,24 @@ src-tauri/src/orden/
 - `orden_list_cmd() -> Vec<String>`
 - `orden_load_cmd(name) -> String`
 - `orden_save_cmd(name, yaml)`
+- `orden_rename_cmd(old_name, new_name, yaml)`
+- `orden_duplicate_cmd(source_name, yaml)`
 - `orden_delete_cmd(name)`
 - `orden_check_cmd(yaml)`
+- `orden_visual_from_yaml_cmd(yaml) -> OrdenVisualConfig`
 - `orden_run_cmd(yaml, simulate, tags, skip_tags) -> OrdenTaskHandle`
 - `orden_run_job_cmd(job) -> OrdenTaskHandle`
 - `orden_task_status_cmd(task_id) -> OrdenTaskStatus`
+- `orden_template_list_cmd() -> Vec<OrdenTemplateInfo>`
+- `orden_template_load_cmd(name) -> String`
+- `orden_template_save_cmd(name, yaml)`
+- `orden_template_delete_cmd(name)`
+- `orden_history_cmd(name, limit) -> Vec<OrdenRunLog>`
+- `orden_delete_history_cmd(id)`
+- `orden_clear_history_cmd(name)`
+- `orden_jobs_cmd() -> Vec<OrdenJob>`
+- `orden_save_job_cmd(job) -> i64`
+- `orden_delete_job_cmd(id)`
 
 ### CLI
 
@@ -184,6 +197,7 @@ Settings → Advanced 是当前图形入口，支持：
 - [x] 模版中心重构为目标分类、流程摘要、文件影响提示和“使用后直接进入 Visual 编辑”的渐进式入口
 - [x] “完整压缩包自动解压”系统模版绑定推荐自动化：每天 08:00/14:00/20:00 扫描，使用模版时同步创建 Cron 任务
 - [x] 新增“监控压缩包，确认后解压”系统模版：源/目标目录可选、密码本、成功删除源包，并默认创建 monitor + 执行前确认任务
+- [x] 消融 Orden 界面重复说明文案；监控解压模板改为原文件夹循环解压，monitor 默认立即执行，保存时同步 watch_paths
 - [x] 新增 `shelfy --mcp` / `shelfy --cli mcp` stdio MCP 服务
 - [x] MCP 写工具由独立 `mcp_allow_write` 控制
 - [ ] Visual 模式保留复杂 YAML 的 round-trip 注释/未知字段
@@ -240,6 +254,8 @@ Settings → Advanced 是当前图形入口，支持：
 - [ ] P2 交互可访问性：Tooltip、表单标签、本地化枚举，并用 Dialog/Alert Dialog 替代审计范围内原生 prompt/confirm
 - [ ] 回归验收：浅色/深色、中文/英文、700×500、900×650、1280×800
 - [x] 新增 `docs/UI_AUDIT.md`，完成 6 张截图的问题编号、代码根因、建议与验收标准映射
+- [x] Orden 纯净启动与空白初始化：清理启动残留的测试/示例配置，消除硬编码的假规则兜底（如预置解压/PDF），无配置时显示空状态，新建配置与添加规则保持纯净空白状态
+- [x] 优化系统整体文档（README、Architecture、TASK）：补齐双引擎、MCP 配置示例、完整 CLI 命令映射、纯净启动策略与测试说明
 
 ## 关键技术决策
 

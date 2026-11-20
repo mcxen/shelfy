@@ -2,33 +2,57 @@
 
 ![Shelfy](docs/shelfylogo.png)
 
-Minimal local automation for files, folders, backups, and AI workflows.
+Minimal, privacy-first local file automation, folder organization, and AI agent workflows.
 
 ![Shelfy hero](docs/assets/shelfy-hero.png)
 
-Shelfy is a privacy-first desktop utility that keeps Downloads, Documents, and project folders organized. It runs locally from the tray, applies simple rules for everyday cleanup, and supports advanced YAML automation for backup and file workflows.
+Shelfy is a desktop utility built with Tauri (Rust + React) that keeps your Downloads, Documents, and workspace folders clean and organized. It runs silently from your system tray, applies real-time rules to incoming files, and provides an advanced YAML workflow engine (**Orden**) for multi-step batching, archiving, and scheduled automations.
+
+---
 
 ## Highlights
 
-- Local-first file organization for Downloads, Documents, and custom folders
-- Visual rules for common backup and sorting flows
-- Source YAML mode powered by the built-in Orden engine
-- Fixed-time and cron scheduling with background keepalive logs
-- Windows Task Scheduler and macOS LaunchAgent keepalive installers
-- Local MCP server for AI clients via `shelfy --mcp`
-- SQLite-backed history, undo, rules, settings, and scheduler logs
+- **Dual-Engine Architecture**:
+  - **Simple Rules**: Low-latency, real-time folder watcher and organizer backed by SQLite.
+  - **Orden Engine**: Full-fledged file automation pipeline with filters, sequential actions, template variables, and conflict policies.
+- **Clean by Default**: Starts clean without unwanted sample rules or ghost configurations polluting your workspace.
+- **Visual Pipeline & Source Dual-Mode**:
+  - **Visual Mode**: Card-based flow (`Source -> Filter Conditions -> Action Pipeline`) with typed parameter editors.
+  - **Source Mode**: Direct YAML editing with live schema validation.
+- **Template Center**:
+  - Built-in system recipes (Organize Images, Documents, Archives, Auto-unpack, Backup, Cleanup).
+  - Custom templates with one-click creation, import, and export.
+- **Flexible Automation Triggers**:
+  - `manual`: On-demand execution.
+  - `fixed`: Scheduled daily at a specific time.
+  - `cron`: Standard 5-field cron cadence.
+  - `interval`: Triggered every $N$ minutes from the last successful run.
+  - `monitor`: Triggered automatically when new matching files enter watched directories.
+  - **Pre-execution Confirmation**: Review simulated match count and safety checks before applying destructive file actions.
+- **Local Model Context Protocol (MCP)**:
+  - Exposes local file intelligence and workflow automation to AI clients (Claude Desktop, Cursor, OpenCode) via `shelfy --mcp`.
+  - Read-only simulation by default; write permissions require explicit user consent.
+- **System Tray & Keepalive**:
+  - Native background daemon with macOS LaunchAgent and Windows Task Scheduler keepalive installers.
+  - Theme-adaptive interface with seamless Light and Dark mode support.
+- **Local Sovereignty**: All metadata, rules, configurations, and logs remain strictly on your machine in local SQLite and YAML files.
 
-## Visual Rules
+---
 
-Use the visual editor for common workflows: pick source files or folders, choose one or more backup destinations, set extensions, and save the generated YAML.
+## Visual Rules & Orden Engine
+
+Use the visual editor to inspect and assemble file workflows intuitively:
 
 ![Shelfy visual rules](docs/assets/shelfy-visual-rules.png)
 
-For advanced cases, switch to Source mode and edit the Orden YAML directly:
+### Orden YAML Workflow Example
+
+For power users, switch to **Source** mode to edit the Orden YAML directly:
 
 ```yaml
 rules:
-  - name: Back up PDFs
+  - name: "Back up PDFs"
+    targets: files
     locations:
       - ~/Downloads
       - ~/Documents/Incoming
@@ -40,115 +64,191 @@ rules:
       - copy: /Volumes/Archive/PDF/
 ```
 
-## Local AI / MCP
+### Supported Filters & Actions
 
-Shelfy can expose local tools to AI clients that support the Model Context Protocol.
+| Category | Available Modules |
+| --- | --- |
+| **Filters** | `extension`, `name` (glob), `regex` (named capture groups), `size`, `empty`, `mimetype`, `hash` (md5/sha1/sha256), `duplicate`, `created`, `lastmodified`, `filecontent` (text/code/docx/pdf), `exif`, `archivefile` |
+| **Actions** | `move`, `copy` (multi-destination fan-out), `rename`, `trash`, `delete`, `echo`, `write` (append/prepend/overwrite), `extract` (ZIP/7z/RAR with password list, auto-recursion, volume detection), `compress`, `symlink`, `hardlink`, `shell` |
+
+---
+
+## Local AI / MCP Integration
+
+Shelfy integrates with the **Model Context Protocol (MCP)** over stdio, enabling AI agents to safely read file structures, simulate workflows, and orchestrate rules.
 
 ![Shelfy local AI](docs/assets/shelfy-local-ai.png)
 
+### Launching MCP
+
 ```bash
+# Launch stdio MCP server
 shelfy --mcp
+
+# Print operational guide and schema
 shelfy --mcp --help
-shelfy --cli mcp
 ```
 
-Available MCP tools include:
+### Claude Desktop Configuration
 
-- `shelfy_list_folders`
-- `shelfy_list_rules`
-- `shelfy_recent_logs`
-- `shelfy_list_orden_configs`
-- `shelfy_get_orden_config`
-- `shelfy_orden_simulate`
-- `shelfy_save_orden_config` when write tools are enabled
-- `shelfy_save_orden_job` when write tools are enabled
-- `shelfy_scan_folder` when write tools are enabled
-- `shelfy_orden_run` when write tools are enabled
+Add the following to your `claude_desktop_config.json`:
 
-Write-capable tools are disabled by default and require the separate MCP write permission in Settings.
+```json
+{
+  "mcpServers": {
+    "shelfy": {
+      "command": "shelfy",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
 
-Orden schedules are separate automation jobs, not fields inside the rule YAML. For a true one-hour interval, call `shelfy_save_orden_job` with `mode: "interval"` and `interval_minutes: 60`. The cron expression `0 * * * *` instead runs on each wall-clock hour.
+### Available MCP Tools
 
-## Install on macOS
+| Tool | Permission | Description |
+| --- | --- | --- |
+| `shelfy_list_folders` | Read | List watched directories and monitoring modes |
+| `shelfy_list_rules` | Read | List active SQLite basic sorting rules |
+| `shelfy_recent_logs` | Read | Fetch recent file organization and undo history |
+| `shelfy_list_orden_configs` | Read | List all saved Orden workflow configurations |
+| `shelfy_get_orden_config` | Read | Read raw YAML for a specific Orden config |
+| `shelfy_list_orden_jobs` | Read | List automation jobs, schedules, and triggers |
+| `shelfy_orden_history` | Read | Query execution logs and error details |
+| `shelfy_orden_simulate` | Read | Dry-run a configuration safely without touching files |
+| `shelfy_save_orden_config` | Write (Opt-in) | Create or update an Orden YAML configuration |
+| `shelfy_save_orden_job` | Write (Opt-in) | Configure a scheduled or monitored automation job |
+| `shelfy_scan_folder` | Write (Opt-in) | Trigger an immediate scan on a directory |
+| `shelfy_orden_run` | Write (Opt-in) | Execute real file modifications with user authorization |
 
-Shelfy ships as a Universal macOS application for Apple Silicon and Intel. Install and update it with Homebrew:
+> **Security Note**: Write tools are disabled by default. Enable `mcp_allow_write` in **Settings → MCP** to allow AI clients to write configs or perform real file operations.
+
+---
+
+## CLI Reference
+
+On macOS, Shelfy automatically installs a terminal symlink at `~/.local/bin/shelfy` upon launch. The explicit `--cli` flag is also supported when invoking the raw application binary directly.
+
+### Everyday Organization & Rules
 
 ```bash
+# Scan a folder against simple rules
+shelfy scan ~/Downloads
+
+# Manage simple rules
+shelfy rules list
+shelfy rules export ~/Desktop/shelfy-rules.json
+shelfy rules import ~/Desktop/shelfy-rules.json [--replace]
+
+# Manage watched folders
+shelfy folders list
+shelfy folders add ~/Downloads [silent|manual|paused]
+shelfy folders mode <folder_id> <silent|manual|paused>
+
+# Manage app settings
+shelfy config path
+shelfy config export ~/Desktop/shelfy-config.json
+shelfy config import ~/Desktop/shelfy-config.json [--replace]
+```
+
+### Orden Workflow Engine
+
+```bash
+# Validate YAML syntax and step schemas
+shelfy orden check /path/to/workflow.yaml
+
+# Simulate execution (dry-run without modifying files)
+shelfy orden sim /path/to/workflow.yaml [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
+
+# Execute real workflow actions
+shelfy orden run /path/to/workflow.yaml [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
+```
+
+*(The `organize` namespace is accepted as a drop-in alias for `orden`)*.
+
+---
+
+## Installation on macOS
+
+Shelfy distributes Universal macOS builds (Apple Silicon & Intel). Install and update via Homebrew:
+
+```bash
+# Add tap and install
 brew tap mcxen/shelfy https://github.com/mcxen/shelfy.git
 brew install --cask mcxen/shelfy/shelfy
+
+# Upgrade to latest
 brew upgrade --cask --greedy-latest mcxen/shelfy/shelfy
 ```
 
-Shelfy can also check for a release and install a verified update from Settings → General. Automatic installation is opt-in; an install location that cannot be replaced by the current user falls back to Homebrew or manual installation without requesting elevated privileges.
+### In-App Updates & Gatekeeper
 
-Current macOS builds are ad-hoc signed rather than Developer ID signed or notarized. If Gatekeeper blocks the first launch, review the warning in System Settings → Privacy & Security and choose Open Anyway.
+- **In-App Updates**: You can check for updates and trigger in-place installation in **Settings → General**.
+- **Gatekeeper Notice**: Pre-release builds use ad-hoc code signing. If macOS displays a Gatekeeper prompt on initial run, navigate to **System Settings → Privacy & Security** and select **Open Anyway**.
 
-## CLI
+---
 
-On macOS, the installed app creates `~/.local/bin/shelfy` on its first launch and adds that directory to zsh/bash login and interactive profiles. Open a new terminal, then use the short CLI form below. The explicit `--cli` form remains supported when calling the app executable directly.
-
-```bash
-shelfy scan <folder>
-shelfy rules list
-shelfy rules export <path>
-shelfy rules import <path> [--replace]
-shelfy folders list
-shelfy folders add <path> [silent|manual|paused]
-shelfy folders mode <id> <silent|manual|paused>
-shelfy config path
-shelfy config export <path>
-shelfy config import <path> [--replace]
-shelfy orden check <config>
-shelfy orden sim <config> [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
-shelfy orden run <config> [--tags t1,t2] [--skip-tags t3] [--working-dir <dir>]
-```
-
-The `organize` CLI namespace is accepted as an alias for `orden`.
-
-## Architecture
+## Architecture & Storage
 
 ```text
-React + TypeScript UI
-Tauri bridge
-Rust core
-  - watcher
-  - rules engine
-  - Orden YAML engine
-  - scheduler and keepalive
-  - stdio MCP server
-SQLite
+React 19 + TypeScript UI (Tailwind CSS + coss primitives)
+  │ (Tauri 2 IPC invoke / events)
+Rust Core
+  ├─ watcher (notify crate, grace period & file lock debouncing)
+  ├─ rules engine (instant regex/extension matching)
+  ├─ Orden YAML engine (lexer, AST, pipeline walker, template engine)
+  ├─ scheduler & keepalive (macOS LaunchAgent / Windows Task Scheduler)
+  └─ stdio MCP server (JSON-RPC 2.0)
+  │
+Persistence
+  ├─ SQLite (<data_dir>/shelfy.db: rules, folders, logs, undo, jobs, settings)
+  └─ YAML storage (<data_dir>/orden/*.yaml and <data_dir>/orden/templates/*.yaml)
 ```
+
+For comprehensive technical documentation, refer to:
+- [`public/architecture/README.md`](public/architecture/README.md) — Architectural boundary, execution pathways, and visual pipeline specifications.
+- [`RESEARCH.md`](RESEARCH.md) — Upstream organize-tool comparison, filter/action semantics, and technical decisions.
+- [`TASK.md`](TASK.md) — Engine implementation roadmap, milestones, and task tracking.
+
+---
 
 ## Development
 
-Requirements:
+### Prerequisites
 
-- Rust stable
-- Node.js 22+
-- Platform dependencies for Tauri
+- **Rust**: Stable toolchain (`rustc`, `cargo`)
+- **Node.js**: Node 22+ & npm
+- **Platform Dependencies**: Standard Tauri prerequisites for macOS/Linux/Windows
+
+### Setup & Run
 
 ```bash
+# Install frontend dependencies
 npm install
+
+# Start development app with hot-reloading
 npm run tauri dev
 ```
 
-Build:
+### Build & Test
 
 ```bash
+# Typecheck & build frontend
+npm run build
+
+# Run Rust unit and integration tests
+cargo test --manifest-path src-tauri/Cargo.toml
+
+# Production package build
 npm run tauri build
 ```
 
-Verify:
+---
 
-```bash
-npm run build
-cd src-tauri && cargo test
-```
+## Privacy & Security
 
-## Privacy
-
-Shelfy is designed to run locally. File names, rules, logs, and settings stay on your machine unless you explicitly export them or expose tools through MCP.
+Shelfy is completely local-first. File metadata, rule configurations, execution histories, and settings never leave your machine unless you explicitly export them or connect an external AI client via MCP.
 
 ## License
 
-AGPL-3.0
+[AGPL-3.0](LICENSE.md)

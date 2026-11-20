@@ -77,22 +77,13 @@ const SYSTEM_ORDEN_TEMPLATES: &[SystemOrdenTemplate] = &[
         yaml: "rules:\n  - name: \"整理压缩包\"\n    locations:\n      - ~/Downloads\n    filters:\n      - archivefile\n    actions:\n      - move: ~/Downloads/Archives/\n",
     },
     SystemOrdenTemplate {
-        id: "extract-downloads",
-        title_key: "settings.orden.templates.system.extract.title",
-        description_key: "settings.orden.templates.system.extract.description",
-        category_key: "settings.orden.templates.categories.automation",
-        icon: "folder-archive",
-        tone: "automation",
-        yaml: "rules:\n  - name: \"完整压缩包自动解压\"\n    locations:\n      - ~/Downloads\n    subfolders: false\n    filters:\n      - archivefile\n    actions:\n      - extract:\n          dest: ~/Downloads/Unpacked/\n          format: auto\n          delete_original: true\n          on_conflict: rename_new\n",
-    },
-    SystemOrdenTemplate {
         id: "watch-extract-confirm",
         title_key: "settings.orden.templates.system.watchExtractConfirm.title",
         description_key: "settings.orden.templates.system.watchExtractConfirm.description",
         category_key: "settings.orden.templates.categories.automation",
         icon: "folder-archive",
         tone: "automation",
-        yaml: "rules:\n  - name: \"监控压缩包并确认解压\"\n    locations:\n      - ~/Downloads\n    targets: files\n    subfolders: false\n    filters:\n      - archivefile\n    actions:\n      - extract:\n          dest: ~/Downloads/Unpacked/\n          format: auto\n          passwords: []\n          delete_original: true\n          recursive: true\n          max_depth: 3\n          on_conflict: rename_new\n          rename_template: '{name}_{counter}{extension}'\n          autodetect_folder: true\n",
+        yaml: "rules:\n  - name: \"监控解压\"\n    locations:\n      - ~/Downloads\n    targets: files\n    subfolders: false\n    filters:\n      - archivefile\n    actions:\n      - extract:\n          dest: \"{basedir}/\"\n          format: auto\n          passwords: []\n          delete_original: true\n          recursive: true\n          max_depth: 3\n          on_conflict: rename_new\n          rename_template: '{name}_{counter}{extension}'\n          autodetect_folder: true\n",
     },
     SystemOrdenTemplate {
         id: "backup-pdfs",
@@ -142,15 +133,6 @@ pub struct OrdenTemplateAutomation {
 
 fn system_template_automation(name: &str) -> Option<OrdenTemplateAutomation> {
     match name {
-        "extract-downloads" => Some(OrdenTemplateAutomation {
-            mode: "cron".to_string(),
-            cron_expr: Some("0 8,14,20 * * *".to_string()),
-            fixed_time: None,
-            interval_minutes: 60,
-            watch_paths: "~/Downloads".to_string(),
-            path_exists: Some("~/Downloads".to_string()),
-            require_confirmation: false,
-        }),
         "watch-extract-confirm" => Some(OrdenTemplateAutomation {
             mode: "monitor".to_string(),
             cron_expr: None,
@@ -158,7 +140,7 @@ fn system_template_automation(name: &str) -> Option<OrdenTemplateAutomation> {
             interval_minutes: 60,
             watch_paths: "~/Downloads".to_string(),
             path_exists: Some("~/Downloads".to_string()),
-            require_confirmation: true,
+            require_confirmation: false,
         }),
         _ => None,
     }
@@ -167,6 +149,9 @@ fn system_template_automation(name: &str) -> Option<OrdenTemplateAutomation> {
 fn ensure_orden_templates(data_dir: &std::path::Path) -> Result<(), String> {
     let dir = orden_templates_dir(data_dir);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    for obsolete in ["extract-downloads"] {
+        let _ = std::fs::remove_file(dir.join(format!("{obsolete}.yaml")));
+    }
     for template in SYSTEM_ORDEN_TEMPLATES {
         let path = dir.join(format!("{}.yaml", template.id));
         let is_current = std::fs::read_to_string(&path)
@@ -177,6 +162,64 @@ fn ensure_orden_templates(data_dir: &std::path::Path) -> Result<(), String> {
         }
     }
     Ok(())
+}
+
+fn location_paths_from_yaml(yaml: &str) -> Vec<String> {
+    let Ok(config) = crate::orden::Config::from_string(yaml) else {
+        return Vec::new();
+    };
+    let mut paths = Vec::new();
+    for rule in config.rules {
+        for location in rule.locations {
+            for path in location.paths {
+                if !path.is_empty() && !paths.iter().any(|existing| existing == &path) {
+                    paths.push(path);
+                }
+            }
+        }
+    }
+    paths
+}
+
+fn sync_monitor_jobs_with_locations(config_name: &str, yaml: &str) {
+    let paths = location_paths_from_yaml(yaml);
+    if paths.is_empty() {
+        return;
+    }
+    let watch_paths = paths.join("\n");
+    let first = paths.first().cloned();
+    let Ok(jobs) = list_orden_jobs() else {
+        return;
+    };
+    for mut job in jobs {
+        if job.config_name != config_name || job.mode != "monitor" {
+            continue;
+        }
+        let old_first = job
+            .watch_paths
+            .lines()
+            .map(str::trim)
+            .find(|line| !line.is_empty())
+            .unwrap_or_default()
+            .to_string();
+        let should_sync_exists = job
+            .path_exists
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .map(|value| value == old_first)
+            .unwrap_or(true);
+        if job.watch_paths == watch_paths
+            && (!should_sync_exists || job.path_exists == first)
+        {
+            continue;
+        }
+        job.watch_paths = watch_paths.clone();
+        if should_sync_exists {
+            job.path_exists = first.clone();
+        }
+        let _ = upsert_orden_job(&job);
+    }
 }
 
 fn find_system_template(name: &str) -> Option<&'static SystemOrdenTemplate> {
@@ -296,7 +339,9 @@ pub fn orden_load_cmd(name: String) -> Result<String, String> {
 pub fn orden_save_cmd(name: String, yaml: String) -> Result<(), String> {
     let clean = crate::orden::normalize_config_name(&name)?;
     crate::orden::save_config_text(&data_dir()?, &clean, &yaml)?;
-    upsert_orden_config(&clean, &yaml).map_err(|e| e.to_string())
+    upsert_orden_config(&clean, &yaml).map_err(|e| e.to_string())?;
+    sync_monitor_jobs_with_locations(&clean, &yaml);
+    Ok(())
 }
 
 #[tauri::command]
@@ -319,6 +364,7 @@ pub fn orden_rename_cmd(old_name: String, new_name: String, yaml: String) -> Res
         let _ = crate::orden::rename_config_text(&root, &new_clean, &old_clean, &yaml);
         return Err(error.to_string());
     }
+    sync_monitor_jobs_with_locations(&new_clean, &yaml);
     Ok(())
 }
 
@@ -750,7 +796,11 @@ fn parse_action_destinations(value: Option<&serde_yaml::Value>, action_name: &st
         destinations.extend(action_destination_values(value));
     }
     if destinations.is_empty() {
-        "~/Documents/Shelfy Backups/".to_string()
+        if matches!(action_name, "extract" | "unarchive" | "decompress") {
+            crate::orden::actions::ORIGINAL_FOLDER_DEST.to_string()
+        } else {
+            "~/Documents/Shelfy Backups/".to_string()
+        }
     } else {
         destinations.join("\n")
     }
@@ -987,40 +1037,31 @@ mod tests {
     }
 
     #[test]
-    fn extract_template_is_valid_and_scheduled_three_times_daily() {
-        let template = find_system_template("extract-downloads").unwrap();
-        crate::orden::Config::from_string(template.yaml).unwrap();
-        assert!(template.yaml.contains("- archivefile"));
-        assert!(!template.yaml.contains("extension:"));
-        assert!(template.yaml.contains("delete_original: true"));
-
-        let automation = system_template_automation(template.id).unwrap();
-        assert_eq!(automation.mode, "cron");
-        assert_eq!(automation.cron_expr.as_deref(), Some("0 8,14,20 * * *"));
-        crate::scheduler::validate_cron_expression(automation.cron_expr.as_deref().unwrap())
-            .unwrap();
-    }
-
-    #[test]
-    fn confirmed_watch_extract_template_exposes_editable_archive_flow() {
+    fn watch_extract_template_unpacks_in_place_on_monitor() {
         let template = find_system_template("watch-extract-confirm").unwrap();
         crate::orden::Config::from_string(template.yaml).unwrap();
+        assert!(find_system_template("extract-downloads").is_none());
 
         let visual = orden_visual_from_yaml_cmd(template.yaml.to_string()).unwrap();
         let rule = &visual.rules[0];
         assert_eq!(rule.location, "~/Downloads");
         assert_eq!(rule.action, "extract");
-        assert_eq!(rule.destination, "~/Downloads/Unpacked/");
+        assert_eq!(rule.destination, "{basedir}/");
         assert!(rule.delete_original);
         assert!(rule.archive_passwords.is_empty());
         assert_eq!(rule.filter_steps[0].kind, "archivefile");
         assert!(rule.action_steps[0].value.contains("recursive: true"));
         assert!(rule.action_steps[0].value.contains("max_depth: 3"));
+        assert!(rule.action_steps[0].value.contains("{basedir}/"));
 
         let automation = system_template_automation(template.id).unwrap();
         assert_eq!(automation.mode, "monitor");
         assert_eq!(automation.watch_paths, "~/Downloads");
-        assert!(automation.require_confirmation);
+        assert!(!automation.require_confirmation);
+        assert_eq!(
+            location_paths_from_yaml(template.yaml),
+            vec!["~/Downloads".to_string()]
+        );
     }
 
     #[test]

@@ -1,6 +1,7 @@
 import { KeyboardEvent, useState } from "react";
 import { X } from "lucide-react";
 import { cn } from "../../lib/utils";
+import { Button } from "./button";
 
 interface TagInputProps {
   value: string[];
@@ -33,9 +34,9 @@ export function TagInput({ value, onChange, placeholder, ariaLabel, className }:
       {value.map((tag) => (
         <span key={tag} className="inline-flex h-6 max-w-full items-center gap-1 rounded-md bg-secondary px-2 text-xs font-medium text-secondary-foreground">
           <span className="truncate">{tag}</span>
-          <button type="button" onClick={() => onChange(value.filter((item) => item !== tag))} className="-mr-1 rounded p-0.5 text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring" aria-label={`${ariaLabel}: ${tag}`}>
+          <Button type="button" variant="ghost" size="icon-sm" onClick={() => onChange(value.filter((item) => item !== tag))} className="-mr-1 size-5 rounded p-0 text-muted-foreground hover:bg-background/70 hover:text-foreground" aria-label={`${ariaLabel}: ${tag}`}>
             <X className="size-3" />
-          </button>
+          </Button>
         </span>
       ))}
       <input type="text" value={draft} onChange={(event) => setDraft(event.target.value)} onKeyDown={handleKeyDown} onBlur={() => addDraft()} onPaste={(event) => { const text = event.clipboardData.getData("text"); if (/[\n,，]/.test(text)) { event.preventDefault(); addDraft(text); } }} placeholder={value.length === 0 ? placeholder : undefined} aria-label={ariaLabel} className="h-6 min-w-24 flex-1 bg-transparent px-1 text-sm outline-none placeholder:text-muted-foreground" />

@@ -1,4 +1,4 @@
-import { KeyboardEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { ChevronLeft, ChevronRight, RefreshCw, Search, Trash2 } from "lucide-react";
 import { OrdenLog, OrdenRunHistory } from "../../store/useAppStore";
@@ -91,13 +91,6 @@ export function OrdenRunHistoryTable({
     setSelectedRow(row);
   };
 
-  const handleRowKeyDown = (event: KeyboardEvent, row: OrdenRunHistory) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      openDetails(row);
-    }
-  };
-
   const deleteButton = (row: OrdenRunHistory) => row.id != null && onDelete && (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -122,10 +115,7 @@ export function OrdenRunHistoryTable({
   return (
     <div className="space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <div>
-          <h3 className="font-medium">{t("settings.orden.history")}</h3>
-          <p className="text-xs text-muted-foreground">{t("settings.orden.historyDesc")}</p>
-        </div>
+        <h3 className="font-medium">{t("settings.orden.history")}</h3>
         <div className="flex items-center gap-1">
           {onRefresh && (
             <Button type="button" onClick={onRefresh} variant="ghost" size="sm">
@@ -173,16 +163,18 @@ export function OrdenRunHistoryTable({
                 {rows.map((row) => {
                   const key = rowKey(row);
                   return (
-                    <TableRow
-                      key={key}
-                      tabIndex={0}
-                      role="button"
-                      onClick={() => openDetails(row)}
-                      onKeyDown={(event) => handleRowKeyDown(event, row)}
-                      className="cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring"
-                      aria-label={t("settings.orden.openHistoryDetails", { time: new Date(row.timestamp).toLocaleString() })}
-                    >
-                      <TableCell className="whitespace-nowrap text-xs">{new Date(row.timestamp).toLocaleString()}</TableCell>
+                    <TableRow key={key}>
+                      <TableCell>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          className="h-auto justify-start px-0 text-left font-normal hover:bg-transparent"
+                          onClick={() => openDetails(row)}
+                          aria-label={t("settings.orden.openHistoryDetails", { time: new Date(row.timestamp).toLocaleString() })}
+                        >
+                          <span className="whitespace-nowrap text-xs font-normal">{new Date(row.timestamp).toLocaleString()}</span>
+                        </Button>
+                      </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{ordenRunTriggerLabel(t, row.trigger)}</TableCell>
                       <TableCell><Badge variant="outline">{row.simulate ? t("settings.orden.simulated") : t("settings.orden.applied")}</Badge></TableCell>
                       <TableCell className="text-xs text-muted-foreground">{t("settings.orden.processSteps", { count: logCounts[key] || 0 })}</TableCell>
@@ -199,27 +191,27 @@ export function OrdenRunHistoryTable({
             {rows.map((row) => {
               const key = rowKey(row);
               return (
-                <div
-                  key={key}
-                  tabIndex={0}
-                  role="button"
-                  onClick={() => openDetails(row)}
-                  onKeyDown={(event) => handleRowKeyDown(event, row)}
-                  className="cursor-pointer rounded-lg border border-border p-3 transition hover:bg-muted/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={t("settings.orden.openHistoryDetails", { time: new Date(row.timestamp).toLocaleString() })}
-                >
+                <div key={key} className="rounded-lg border border-border p-3">
                   <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <div className="text-sm font-medium">{new Date(row.timestamp).toLocaleString()}</div>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
-                        <span>{ordenRunTriggerLabel(t, row.trigger)}</span>
-                        <Badge variant="outline">{row.simulate ? t("settings.orden.simulated") : t("settings.orden.applied")}</Badge>
-                        <Badge variant={row.errors > 0 ? "destructive" : "secondary"}>{row.success} / {row.errors}</Badge>
-                      </div>
-                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-auto min-w-0 flex-1 justify-start px-0 text-left font-normal hover:bg-transparent"
+                      onClick={() => openDetails(row)}
+                      aria-label={t("settings.orden.openHistoryDetails", { time: new Date(row.timestamp).toLocaleString() })}
+                    >
+                      <span className="flex min-w-0 flex-col items-start">
+                        <span className="text-sm font-medium">{new Date(row.timestamp).toLocaleString()}</span>
+                        <span className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                          <span>{ordenRunTriggerLabel(t, row.trigger)}</span>
+                          <Badge variant="outline">{row.simulate ? t("settings.orden.simulated") : t("settings.orden.applied")}</Badge>
+                          <Badge variant={row.errors > 0 ? "destructive" : "secondary"}>{row.success} / {row.errors}</Badge>
+                        </span>
+                        <span className="mt-2 text-xs text-muted-foreground">{t("settings.orden.processSteps", { count: logCounts[key] || 0 })}</span>
+                      </span>
+                    </Button>
                     <div className="shrink-0">{deleteButton(row)}</div>
                   </div>
-                  <div className="mt-2 text-xs text-muted-foreground">{t("settings.orden.processSteps", { count: logCounts[key] || 0 })}</div>
                 </div>
               );
             })}

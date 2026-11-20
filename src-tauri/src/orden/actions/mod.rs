@@ -116,7 +116,7 @@ pub fn build_action(def: &ActionDef) -> Result<Box<dyn Action>, String> {
             parse_i64(&def.value, "simulation_returncode", 0),
         ))),
         "extract" | "unarchive" | "decompress" => Ok(Box::new(ExtractArchive::new(
-            as_string(&def.value, &def.name, "dest")?,
+            extract_dest(&def.value),
             ArchiveFormat::parse(&parse_str(&def.value, "format", "auto"))?,
             parse_string_list(&def.value, "passwords", "password"),
             parse_bool(&def.value, "delete_original", false),
@@ -162,6 +162,23 @@ pub(crate) fn log_history(action: &str, src: &Path, dst: &Path, rule_label: Opti
 
 /// If the action value is a plain string, return it for the required key `key`
 /// (organize allows `- move: ~/path/` as shorthand for `dest`).
+/// Extract into the archive's original folder when dest is omitted or empty.
+pub const ORIGINAL_FOLDER_DEST: &str = "{basedir}/";
+
+fn extract_dest(v: &serde_yaml::Value) -> String {
+    match v {
+        serde_yaml::Value::String(s) if !s.trim().is_empty() => s.clone(),
+        serde_yaml::Value::Mapping(m) => m
+            .get(&serde_yaml::Value::String("dest".into()))
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .unwrap_or(ORIGINAL_FOLDER_DEST)
+            .to_string(),
+        _ => ORIGINAL_FOLDER_DEST.to_string(),
+    }
+}
+
 fn as_string(v: &serde_yaml::Value, action: &str, key: &str) -> Result<String, String> {
     match v {
         serde_yaml::Value::String(s) => Ok(s.clone()),
@@ -296,4 +313,27 @@ fn parse_string_list(v: &serde_yaml::Value, list_key: &str, single_key: &str) ->
 fn parse_conflict(v: &serde_yaml::Value, default: &str) -> Result<ConflictMode, String> {
     let s = parse_str(v, "on_conflict", default);
     ConflictMode::parse(&s)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_defaults_dest_to_original_folder() {
+        let mapping = serde_yaml::from_str::<serde_yaml::Value>(
+            "format: auto\nrecursive: true\ndelete_original: true\n",
+        )
+        .unwrap();
+        assert_eq!(extract_dest(&mapping), ORIGINAL_FOLDER_DEST);
+        assert_eq!(extract_dest(&serde_yaml::Value::Null), ORIGINAL_FOLDER_DEST);
+        assert_eq!(
+            extract_dest(&serde_yaml::Value::String(String::new())),
+            ORIGINAL_FOLDER_DEST
+        );
+        assert_eq!(
+            extract_dest(&serde_yaml::Value::String("{basedir}/".into())),
+            "{basedir}/"
+        );
+    }
 }

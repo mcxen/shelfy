@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { open } from "@tauri-apps/plugin-dialog";
 import { DEFAULT_ORDEN_EXAMPLE, OrdenJob, OrdenRunResult, OrdenTemplate, OrdenVisualConfig, OrdenVisualRule, useAppStore } from "../../store/useAppStore";
-import { defaultOrdenVisualConfig, mergePathText, normalizeDialogSelection, OrdenEditorMode, OrdenView, visualToOrdenYaml, yamlQuote } from "./utils";
+import { createBlankOrdenVisualRule, defaultOrdenVisualConfig, mergePathText, normalizeDialogSelection, OrdenEditorMode, OrdenView, visualToOrdenYaml, yamlQuote } from "./utils";
 import { OrdenPreview } from "./OrdenPreview";
 import { OrdenRunHistoryTable } from "./OrdenRunHistoryTable";
 import { OrdenVisualRuleCard } from "./OrdenVisualRuleCard";
@@ -38,7 +38,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
 
   const [ordenConfigs, setOrdenConfigs] = useState<string[]>([]);
   const [ordenTemplates, setOrdenTemplates] = useState<OrdenTemplate[]>([]);
-  const [ordenName, setOrdenName] = useState("main");
+  const [ordenName, setOrdenName] = useState("");
   const [editingConfigName, setEditingConfigName] = useState<string | null>(null);
   const [ordenDirty, setOrdenDirty] = useState(false);
   const [discardEditorOpen, setDiscardEditorOpen] = useState(false);
@@ -76,10 +76,12 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
       .then((rows) => setOrdenHistoryByConfig(Object.fromEntries(rows)))
       .catch(console.error);
     const nameToLoad = preferredName || (ordenName && names.includes(ordenName) ? ordenName : names[0]);
-    if (nameToLoad) setOrdenName(nameToLoad);
-    else {
-      setOrdenName("main");
+    if (nameToLoad) {
+      setOrdenName(nameToLoad);
+    } else {
+      setOrdenName("");
       setOrdenYaml(DEFAULT_ORDEN_EXAMPLE);
+      setOrdenVisual(defaultOrdenVisualConfig());
       setOrdenHistoryRows([]);
     }
   };
@@ -151,7 +153,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
 
   const parseOrdenVisual = async (yamlText: string) => {
     const parsed = await ordenVisualFromYaml(yamlText);
-    setOrdenVisual(parsed.rules.length > 0 ? parsed : defaultOrdenVisualConfig());
+    setOrdenVisual(parsed);
   };
 
   const handleOrdenEditorModeChange = async (mode: OrdenEditorMode) => {
@@ -189,11 +191,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
       const next = {
         rules: [
           ...prev.rules,
-          {
-            ...defaultOrdenVisualConfig().rules[0],
-            id: `rule-${Date.now()}`,
-            name: `Rule ${prev.rules.length + 1}`,
-          },
+          createBlankOrdenVisualRule(`Rule ${prev.rules.length + 1}`),
         ],
       };
       setOrdenYaml(visualToOrdenYaml(next));
@@ -256,10 +254,14 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
       const rule = ordenVisual.rules.find((item) => item.id === id);
       const actionSteps = (rule?.actionSteps || []).map((step) => {
         if (step.id !== stepId) return step;
-        const value = step.kind === "copy" && paths.length > 1
-          ? `dest:\n${paths.map((path) => `  - ${yamlQuote(path)}`).join("\n")}\ncontinue_with: original`
-          : yamlQuote(paths[0]);
-        return { ...step, value };
+        if (step.kind === "copy" && paths.length > 1) {
+          return { ...step, value: `dest:\n${paths.map((path) => `  - ${yamlQuote(path)}`).join("\n")}\ncontinue_with: original` };
+        }
+        if (["extract", "unarchive", "compress", "archive"].includes(step.kind) && step.value.includes(":")) {
+          const next = step.value.replace(/^dest:\s*.+$/m, `dest: ${yamlQuote(paths[0])}`);
+          return { ...step, value: /^dest:/m.test(step.value) ? next : `dest: ${yamlQuote(paths[0])}\n${step.value}` };
+        }
+        return { ...step, value: yamlQuote(paths[0]) };
       });
       updateOrdenVisualRule(id, {
         destination: mergePathText(rule?.destination || "", paths),
@@ -297,7 +299,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
       const visual = await ordenVisualFromYaml(yaml);
       setOrdenName(name);
       setOrdenYaml(yaml);
-      setOrdenVisual(visual.rules.length > 0 ? visual : defaultOrdenVisualConfig());
+      setOrdenVisual(visual);
       setOrdenHistoryRows(history);
       setOrdenHistoryByConfig((previous) => ({ ...previous, [name]: history }));
       setOrdenDetailName(name);
@@ -341,6 +343,27 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
       setOrdenDirty(false);
       setOrdenYaml(yaml);
       await loadOrdenConfigs(cleanName);
+      const jobs = await ordenJobs();
+      setOrdenJobsRows(jobs);
+      const hasExtract = (ordenEditorMode === "visual" ? ordenVisual.rules : []).some((rule) =>
+        (rule.actionSteps || []).some((step) => step.kind === "extract" || step.kind === "unarchive") || rule.action === "extract"
+      ) || /\n\s*-\s*(extract|unarchive|decompress)\b/.test(yaml);
+      if (!previousName && hasExtract && !jobs.some((job) => job.config_name === cleanName)) {
+        const locations = (ordenEditorMode === "visual"
+          ? ordenVisual.rules.flatMap((rule) => rule.location.split(/\r?\n/).map((path) => path.trim()).filter(Boolean))
+          : [])
+          .filter(Boolean);
+        const watchPaths = Array.from(new Set(locations)).join("\n") || "~/Downloads";
+        await ordenSaveJob({
+          ...newOrdenJob(cleanName),
+          name: `${cleanName}-watch`,
+          mode: "monitor",
+          watch_paths: watchPaths,
+          path_exists: watchPaths.split("\n")[0] || "~/Downloads",
+          require_confirmation: false,
+        });
+        setOrdenJobsRows(await ordenJobs());
+      }
       showOrdenToast(t("settings.orden.saveSuccess"), "success");
     } catch (e) {
       console.error("Save orden config failed:", e);
@@ -378,7 +401,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
     setOrdenName(configName);
     setEditingConfigName(configName);
     setOrdenYaml(template.yaml);
-    setOrdenVisual(visual.rules.length > 0 ? visual : defaultOrdenVisualConfig());
+    setOrdenVisual(visual);
     setOrdenEditorMode("visual");
     setOrdenDirty(false);
     setOrdenView("editor");
@@ -461,10 +484,12 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
   });
 
   const handleNewOrdenConfig = () => {
-    setOrdenName("main");
+    setOrdenName("");
     setEditingConfigName(null);
-    setOrdenYaml(DEFAULT_ORDEN_EXAMPLE);
-    setOrdenVisual(defaultOrdenVisualConfig());
+    const initialRule = createBlankOrdenVisualRule("Rule 1");
+    const newConfig = { rules: [initialRule] };
+    setOrdenVisual(newConfig);
+    setOrdenYaml(visualToOrdenYaml(newConfig));
     setOrdenEditorMode("visual");
     setOrdenResult(null);
     setOrdenPreviewError(null);
@@ -686,7 +711,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                 <div className="flex items-center justify-between gap-3">
                   <div className="flex items-center gap-3">
                     <Button type="button" onClick={() => setOrdenView("list")} variant="ghost" size="icon" aria-label={t("settings.orden.backToList")}><ChevronLeft size={17} /></Button>
-                    <div><h2 className="text-lg font-semibold">{ordenDetailName}</h2><p className="text-xs text-muted-foreground">{t("settings.orden.detailDesc")}</p></div>
+                    <div><h2 className="text-lg font-semibold">{ordenDetailName}</h2></div>
                   </div>
                   <div className="flex items-center gap-2">
                     <Button type="button" onClick={() => runOrdenConfigByName(ordenDetailName, true, "detail")} variant="outline" disabled={ordenBusy}><ScanSearch size={14} />{t("settings.orden.simulate")}</Button>
@@ -700,7 +725,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                   <Card className="p-3"><div className="text-xs text-muted-foreground">{t("settings.orden.lastResult")}</div><div className="mt-0.5 text-sm font-medium">{history[0] ? `${history[0].success} / ${history[0].errors}` : "—"}</div></Card>
                 </div>
                 <Card className="space-y-2 p-3">
-                  <div><h3 className="font-medium">{t("settings.orden.previewRules")}</h3><p className="text-xs text-muted-foreground">{t("settings.orden.previewRulesDesc")}</p></div>
+                  <div><h3 className="font-medium">{t("settings.orden.previewRules")}</h3></div>
                   <Table>
                     <TableHeader><TableRow><TableHead>{t("settings.orden.rule")}</TableHead><TableHead>{t("settings.orden.locations")}</TableHead><TableHead>{t("settings.orden.filter")}</TableHead><TableHead>{t("settings.orden.action")}</TableHead><TableHead>{t("settings.orden.destination")}</TableHead></TableRow></TableHeader>
                     <TableBody>
@@ -736,9 +761,6 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                   <h2 className="truncate text-lg font-semibold">
                     {ordenView === "list" ? t("settings.orden.title") : ordenName}
                   </h2>
-                  <p className="text-xs text-muted-foreground">
-                    {ordenView === "list" ? t("settings.orden.centerDesc") : t("settings.orden.editorDesc")}
-                  </p>
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -841,11 +863,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
 
               {ordenView === "list" && (
               <div className="space-y-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div>
-                    <Label className="text-sm font-medium">{t("settings.orden.configTable")}</Label>
-                    <p className="text-xs text-muted-foreground">{t("settings.orden.configTableDesc")}</p>
-                  </div>
+                <div className="flex flex-wrap items-center justify-end gap-2">
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
                     <Input value={ordenSearch} onChange={(event) => setOrdenSearch(event.target.value)} placeholder={t("settings.orden.searchConfigs")} className="h-8 w-56 pl-8" />
@@ -863,7 +881,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                         const status = !last ? "ready" : last.errors > 0 ? "failed" : "success";
                         return (
                           <TableRow key={name} data-state={name === ordenName ? "selected" : undefined}>
-                            <TableCell><button type="button" className="text-left" onClick={() => handleOrdenPreview(name)}><div className="font-medium">{name}</div><div className="max-w-64 truncate text-xs text-muted-foreground">{ordenNotes[name] || t("settings.orden.noNote")}</div></button></TableCell>
+                            <TableCell><Button type="button" variant="ghost" className="h-auto justify-start px-0 text-left font-normal hover:bg-transparent" onClick={() => handleOrdenPreview(name)}><span className="flex min-w-0 flex-col items-start"><span className="font-medium">{name}</span><span className="max-w-64 truncate text-xs text-muted-foreground">{ordenNotes[name] || t("settings.orden.noNote")}</span></span></Button></TableCell>
                             <TableCell><Badge variant="outline" className="gap-1.5"><span aria-hidden="true" className={`size-1.5 rounded-full ${status === "success" ? "bg-primary" : status === "failed" ? "bg-destructive" : "bg-muted-foreground/64"}`} />{t(`settings.orden.status_${status}`)}</Badge></TableCell>
                             <TableCell><Badge variant="outline" className="gap-1.5"><span aria-hidden="true" className={`size-1.5 rounded-full ${scheduled ? "bg-primary" : "bg-muted-foreground/64"}`} />{scheduled ? t("settings.orden.running") : t("settings.orden.stopped")}</Badge></TableCell>
                             <TableCell className="text-xs text-muted-foreground">{last ? new Date(last.timestamp).toLocaleString() : "—"}</TableCell>
@@ -919,7 +937,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                     const status = !last ? "ready" : last.errors > 0 ? "failed" : "success";
                     return <div key={name} className="rounded-lg border border-border p-3" data-state={name === ordenName ? "selected" : undefined}>
                       <div className="flex items-start justify-between gap-2">
-                        <button type="button" className="min-w-0 text-left" onClick={() => handleOrdenPreview(name)}><div className="truncate text-sm font-medium">{name}</div><div className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{ordenNotes[name] || t("settings.orden.noNote")}</div></button>
+                        <Button type="button" variant="ghost" className="h-auto min-w-0 justify-start px-0 text-left font-normal hover:bg-transparent" onClick={() => handleOrdenPreview(name)}><span className="flex min-w-0 flex-col items-start"><span className="truncate text-sm font-medium">{name}</span><span className="mt-0.5 line-clamp-2 text-xs text-muted-foreground">{ordenNotes[name] || t("settings.orden.noNote")}</span></span></Button>
                         <div className="flex shrink-0 items-center gap-1">
                           <Tooltip><TooltipTrigger asChild><Button type="button" onClick={() => runOrdenConfigByName(name, true)} variant="ghost" size="icon-sm" disabled={ordenBusy} aria-label={t("settings.orden.simulate")}><ScanSearch size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.simulate")}</TooltipContent></Tooltip>
                           <Tooltip><TooltipTrigger asChild><Button type="button" onClick={() => handleOrdenPreview(name)} variant="ghost" size="icon-sm" aria-label={t("settings.orden.preview")}><Eye size={14} /></Button></TooltipTrigger><TooltipContent>{t("settings.orden.preview")}</TooltipContent></Tooltip>
@@ -988,10 +1006,7 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
 
             {ordenView === "list" && <section className="space-y-3">
               <div className="flex items-center justify-between gap-2">
-                <div>
-                  <Label className="text-sm font-medium">{t("settings.orden.tasks")}</Label>
-                  <p className="text-xs text-muted-foreground">{t("settings.orden.tasksDesc")}</p>
-                </div>
+                <Label className="text-sm font-medium">{t("settings.orden.tasks")}</Label>
                 <Button onClick={() => handleNewOrdenJob()} variant="outline" size="sm" disabled={ordenConfigs.length === 0}>
                   <Plus size={14} />
                   {t("settings.orden.newTask")}
@@ -1136,17 +1151,18 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
 
               {ordenEditorMode === "source" ? (
                 <div className="overflow-hidden rounded-lg border border-border bg-card">
-                  <button
+                  <Button
                     type="button"
+                    variant="ghost"
                     onClick={() => setOrdenSourceExpanded((prev) => !prev)}
-                    className="flex w-full items-center justify-between px-3 py-2 text-left text-sm"
+                    className="h-auto w-full justify-between rounded-none px-3 py-2 text-left text-sm font-normal"
                   >
                     <span className="font-medium">{t("settings.orden.source")}</span>
                     <span className="flex items-center gap-2 text-xs text-muted-foreground">
                       {ordenSourceExpanded ? t("settings.orden.hideYaml") : t("settings.orden.showYaml")}
                       {ordenSourceExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
                     </span>
-                  </button>
+                  </Button>
                   {ordenSourceExpanded && (
                     <div className="border-t border-border p-3">
                       <textarea
@@ -1166,17 +1182,23 @@ export function OrdenTab({ activeTab, onOpenAdvanced, onOpenHistory, onFolderAcc
                       {t("settings.orden.addRule")}
                     </Button>
                   </div>
-                  {ordenVisual.rules.map((rule, idx) => (
-                    <OrdenVisualRuleCard
-                      key={rule.id}
-                      rule={rule}
-                      index={idx}
-                      onUpdate={updateOrdenVisualRule}
-                      onRemove={handleRemoveOrdenVisualRule}
-                      onChooseLocations={handleChooseOrdenLocations}
-                      onChooseDestinations={handleChooseOrdenDestinations}
-                    />
-                  ))}
+                  {ordenVisual.rules.length === 0 ? (
+                    <Card className="flex flex-col items-center justify-center p-8 text-center text-muted-foreground border-dashed">
+                      <p className="text-sm">{t("settings.orden.noRules", { defaultValue: "暂无分类规则，点击右上角添加规则" })}</p>
+                    </Card>
+                  ) : (
+                    ordenVisual.rules.map((rule, idx) => (
+                      <OrdenVisualRuleCard
+                        key={rule.id}
+                        rule={rule}
+                        index={idx}
+                        onUpdate={updateOrdenVisualRule}
+                        onRemove={handleRemoveOrdenVisualRule}
+                        onChooseLocations={handleChooseOrdenLocations}
+                        onChooseDestinations={handleChooseOrdenDestinations}
+                      />
+                    ))
+                  )}
                 </div>
               )}
             </div>

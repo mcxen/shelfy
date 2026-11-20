@@ -326,18 +326,8 @@ async function waitForOrdenTask(taskId: string, signal: AbortSignal): Promise<Or
   }
 }
 
-// The default example orden config: scan downloads for .html files and copy
-// them into a "网页" (web pages) subfolder.
-export const DEFAULT_ORDEN_EXAMPLE = `rules:
-  - name: "扫描下载目录的 HTML 文件并复制到网页文件夹"
-    locations:
-      - ~/Downloads
-    subfolders: true
-    filters:
-      - extension: html
-    actions:
-      - copy: ~/Downloads/网页/
-`;
+// The default minimal empty orden config.
+export const DEFAULT_ORDEN_EXAMPLE = `rules: []\n`;
 
 interface AppState {
   rules: Rule[];
